@@ -1,0 +1,11 @@
+[package]
+name = "nel"
+version = "0.0.1"
+authors = ["majorz"]
+description = "Experimental programming language"
+homepage = "https://github.com/majorz/nel"
+repository = "https://github.com/majorz/nel"
+keywords = ["programming-language", "language", "experimental", "functional"]
+license = "Apache-2.0"
+
+[dependencies]
