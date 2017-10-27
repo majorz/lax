@@ -1,0 +1,121 @@
+
+fn tokenize input
+   tokens = ()
+
+   line = 1
+   col = 1
+   pos = 1
+
+   back = input
+
+   loop
+      token = match_token back
+
+      if token == err
+         ret err
+            $pos: pos
+            $line: line
+            $col: col
+
+      if .token == none
+         ret tokens
+
+      back = .back
+
+      tokens.push
+         $token: .token
+         $span: .span
+         $pos: pos
+         $line: line
+         $col: col
+
+      if .token == $new_line
+         col = 1
+         line += 1
+      el
+         col += .span
+
+      pos += .span
+
+fn match_token input
+   token = match front input
+      none: none
+
+      `** : $power
+      `== : $equal
+      `!= : $unequal
+      `<= : $less_equal
+      `>= : $greater_equal
+      `+= : $increase
+      `-= : $decrease
+
+      `\n : $new_line
+
+      `.  : $dot
+      `$  : $symbol
+      `=  : $assign
+      `+  : $add
+      `-  : $subtract
+      `*  : $multiply
+      `/  : $divide
+      `(  : $paren_right
+      `)  : $paren_left
+      `[  : $bracket_left,
+      `]  : $bracket_right,
+      `<  : $angle_left,
+      `>  : $angle_right,
+
+      comment : $comment
+      accent  : $accent
+      string  : $string
+      ident   : $ident
+      number  : $number
+
+      _ : ret err
+
+   .span = len .front
+
+   .back = .back
+
+   token
+
+fn number
+   (
+      optional or `- `+
+      zero_plus digit
+      optional `.
+      one_plus digit
+   )
+
+fn ident
+   (
+      one_plus or `_ alpha
+      zero_plus or digit `_ alpha
+   )
+
+fn comment
+   `# (zero_plus) (`\n or none)
+
+fn accent
+   `` one_plus (escape_pair or not accent_terminator)
+
+fn string
+   `' zero_plus (`\\' or not or `' `\n) `'
+
+fn accent_terminator
+   or whitespace `\) `\n`
+
+fn escape_pair
+   `\\ escaped_char
+
+fn escaped_char
+   or `\\ `\) `n `r `t `f `v
+
+fn digit
+   `0 .. `9
+
+fn alpha
+   `a .. `z or `A .. `Z
+
+fn whitespace
+   or `\n `\r `\t `\f `\v ' '
