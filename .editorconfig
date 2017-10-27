@@ -14,5 +14,8 @@ indent_size = 3
 [*.md]
 indent_size = 3
 
+[*.nel]
+indent_size = 3
+
 [*.yml]
 indent_size = 2
