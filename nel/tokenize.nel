@@ -6,84 +6,77 @@ fn tokenize input
    col = 1
    pos = 1
 
-   back = input
+   next = input
 
    loop
-      token = match_token back
+      if empty back
+         break
 
-      if token == err
-         ret err
-            $pos: pos
-            $line: line
-            $col: col
+      match match_token next
+         ^ok | token span back:
+            tokens +=
+               ^token: token
+               ^span: span
+               ^pos: pos
+               ^line: line
+               ^col: col
 
-      if .token == none
-         ret tokens
+            if token == ^new_line
+               col = 1
+               line += 1
+            el
+               col += span
 
-      back = .back
+            next = back
 
-      tokens.push
-         $token: .token
-         $span: .span
-         $pos: pos
-         $line: line
-         $col: col
+            pos += span
+         ^err:
+            ret ^err pos line col
 
-      if .token == $new_line
-         col = 1
-         line += 1
-      el
-         col += .span
-
-      pos += .span
+   ^ok tokens
 
 fn match_token input
-   token = match front input
-      none: none
+   token matched back = match front input
+      `** : ^power
+      `== : ^equal
+      `!= : ^unequal
+      `<= : ^less_equal
+      `>= : ^greater_equal
+      `+= : ^increase
+      `-= : ^decrease
 
-      `** : $power
-      `== : $equal
-      `!= : $unequal
-      `<= : $less_equal
-      `>= : $greater_equal
-      `+= : $increase
-      `-= : $decrease
+      `\n : ^new_line
+      `.  : ^dot
+      `$  : ^symbol
+      `=  : ^assign
+      `+  : ^add
+      `-  : ^subtract
+      `*  : ^multiply
+      `/  : ^divide
+      `(  : ^paren_right
+      `\) : ^paren_left
+      `[  : ^bracket_left
+      `]  : ^bracket_right
+      `<  : ^angle_left
+      `>  : ^angle_right
 
-      `\n : $new_line
+      comment : ^comment
+      accent  : ^accent
+      string  : ^string
+      ident   : ^ident
+      number  : ^number
 
-      `.  : $dot
-      `$  : $symbol
-      `=  : $assign
-      `+  : $add
-      `-  : $subtract
-      `*  : $multiply
-      `/  : $divide
-      `(  : $paren_right
-      `)  : $paren_left
-      `[  : $bracket_left,
-      `]  : $bracket_right,
-      `<  : $angle_left,
-      `>  : $angle_right,
+      _       : ret ^err
 
-      comment : $comment
-      accent  : $accent
-      string  : $string
-      ident   : $ident
-      number  : $number
+   span = len matched
 
-      _ : ret err
-
-   .span = len .front
-
-   .back = .back
-
-   token
+   ^ok token span back
 
 fn number
    (
-      optional or `- `+
+      zero_one or `- `+
       zero_plus digit
-      optional `.
+      zero_one `.
       one_plus digit
    )
 
@@ -94,16 +87,18 @@ fn ident
    )
 
 fn comment
-   `# (zero_plus) (`\n or none)
+   `# zero_plus not `\n
 
 fn accent
    `` one_plus (escape_pair or not accent_terminator)
 
 fn string
-   `' zero_plus (`\\' or not or `' `\n) `'
+   `'
+   zero_plus (`\\' or not or `' `\n)
+   `'
 
 fn accent_terminator
-   or whitespace `\) `\n`
+   or whitespace `\) `\n
 
 fn escape_pair
    `\\ escaped_char
