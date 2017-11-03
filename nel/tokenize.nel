@@ -37,6 +37,10 @@ fn tokenize input
 
 fn match_token input
    token matched back = match front input
+      space : ^space
+      tab   : ^tab
+      `\n   : ^new_line
+
       `** : ^power
       `== : ^equal
       `!= : ^unequal
@@ -45,14 +49,14 @@ fn match_token input
       `+= : ^increase
       `-= : ^decrease
 
-      `\n : ^new_line
       `.  : ^dot
-      `$  : ^symbol
+      `^  : ^caret
       `=  : ^assign
       `+  : ^add
       `-  : ^subtract
       `*  : ^multiply
       `/  : ^divide
+      `|  : ^bar
       `(  : ^paren_right
       `\) : ^paren_left
       `[  : ^bracket_left
@@ -71,6 +75,12 @@ fn match_token input
    span = len matched
 
    ^ok token span back
+
+fn space
+   one_plus ' '
+
+fn tab
+   one_plus `\t
 
 fn number
    (

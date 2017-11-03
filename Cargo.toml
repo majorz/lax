@@ -9,3 +9,4 @@ keywords = ["programming-language", "language", "experimental", "functional"]
 license = "Apache-2.0"
 
 [dependencies]
+regex = "*"
