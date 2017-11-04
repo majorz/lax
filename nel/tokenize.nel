@@ -1,6 +1,6 @@
 
 fn tokenize input
-   tokens = ()
+   tokens = ~
 
    line = 1
    col = 1
@@ -83,18 +83,16 @@ fn tab
    one_plus `\t
 
 fn number
-   (
-      zero_one or `- `+
+   ~
+      zero_one (or `- `+)
       zero_plus digit
       zero_one `.
       one_plus digit
-   )
 
 fn ident
-   (
-      one_plus or `_ alpha
-      zero_plus or digit `_ alpha
-   )
+   ~
+      one_plus (or `_ alpha)
+      zero_plus (or digit `_ alpha)
 
 fn comment
    `# zero_plus not `\n
@@ -120,7 +118,7 @@ fn digit
    `0 .. `9
 
 fn alpha
-   `a .. `z or `A .. `Z
+   or `a .. `z `A .. `Z
 
 fn whitespace
    or `\n `\r `\t `\f `\v ' '
