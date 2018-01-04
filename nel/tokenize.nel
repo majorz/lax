@@ -1,6 +1,6 @@
 
-fn tokenize input
-   tokens = ~
+fn tokenize(input)
+   tokens = []
 
    line = 1
    col = 1
@@ -9,17 +9,18 @@ fn tokenize input
    next = input
 
    loop
-      if empty back
+      if empty(back)
          break
 
-      match match_token next
-         ^ok | token span back:
-            tokens +=
+      match match_token(next)
+         ^ok token span back:
+            tokens += {
                ^token: token
                ^span: span
                ^pos: pos
                ^line: line
                ^col: col
+            }
 
             if token == ^new_line
                col = 1
@@ -35,8 +36,8 @@ fn tokenize input
 
    ^ok tokens
 
-fn match_token input
-   token matched back = match front input
+fn match_token(input)
+   token matched back = match front(input)
       space : ^space
       tab   : ^tab
       `\n   : ^new_line
@@ -63,6 +64,8 @@ fn match_token input
       `]  : ^bracket_right
       `<  : ^angle_left
       `>  : ^angle_right
+      `{  : ^curly_right
+      `}  : ^curly_left
 
       comment : ^comment
       accent  : ^accent
@@ -72,53 +75,63 @@ fn match_token input
 
       _       : ret ^err
 
-   span = len matched
+   span = len(matched)
 
    ^ok token span back
 
-fn space
-   one_plus ' '
+fn space()
+   one_plus(' ')
 
-fn tab
-   one_plus `\t
+fn tab()
+   one_plus(`\t)
 
-fn number
-   ~
-      zero_one (or `- `+)
-      zero_plus digit
-      zero_one `.
-      one_plus digit
+fn number()
+   [
+      zero_one(`- or `+)
+      zero_plus(digit())
+      zero_one(`.)
+      one_plus(digit())
+   ]
 
-fn ident
-   ~
-      one_plus (or `_ alpha)
-      zero_plus (or digit `_ alpha)
+fn ident()
+   [
+      one_plus(`_ or alpha())
+      zero_plus(digit() or `_ or alpha())
+   ]
 
-fn comment
-   `# zero_plus not `\n
+fn comment()
+   [
+      `#
+      zero_plus(not `\n)
+   ]
 
-fn accent
-   `` one_plus (escape_pair or not accent_terminator)
+fn accent()
+   [
+      ``
+      one_plus(escape_pair() or not accent_terminator())
+   ]
 
-fn string
-   `'
-   zero_plus (`\\' or not or `' `\n)
-   `'
+fn string()
+   [
+      `'
+      zero_plus(`\\' or not (`' or `\n))
+      `'
+   ]
 
-fn accent_terminator
-   or whitespace `\) `\n
+fn accent_terminator()
+   whitespace() or `\) or `\n
 
-fn escape_pair
-   `\\ escaped_char
+fn escape_pair()
+   `\\ or escaped_char()
 
-fn escaped_char
-   or `\\ `\) `n `r `t `f `v
+fn escaped_char()
+   `\\ or `\) or `n or `r or `t or `f or `v
 
-fn digit
+fn digit()
    `0 .. `9
 
-fn alpha
-   or `a .. `z `A .. `Z
+fn alpha()
+   `a .. `z or `A .. `Z
 
-fn whitespace
-   or `\n `\r `\t `\f `\v ' '
+fn whitespace()
+   `\n or `\r or `\t or `\f or `\v or ' '

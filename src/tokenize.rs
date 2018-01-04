@@ -28,6 +28,8 @@ pub enum Token {
    BracketRight,
    AngleLeft,
    AngleRight,
+   CurlyLeft,
+   CurlyRight,
    Comment,
    Accent,
    String,
@@ -35,7 +37,7 @@ pub enum Token {
    Number,
 }
 
-const REGEX_MAP: [(&'static str, Token); 30] = [
+const REGEX_MAP: [(&'static str, Token); 32] = [
    (r"^ +",    Token::Space),
    (r"^\t+",   Token::Tab),
    (r"^\n",    Token::NewLine),
@@ -61,6 +63,8 @@ const REGEX_MAP: [(&'static str, Token); 30] = [
    (r"^\]",    Token::BracketRight),
    (r"^<",     Token::AngleLeft),
    (r"^>",     Token::AngleRight),
+   (r"^\{",    Token::CurlyLeft),
+   (r"^}",     Token::CurlyRight),
    (r"^#[^\n]",                  Token::Comment),
    (r"^`(?:\\\)|[^)\s])+",       Token::Accent),
    (r"^'(?:\\'|[^'])*'",         Token::String),
