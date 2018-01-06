@@ -1,8 +1,7 @@
 use regex::Regex;
-use std::cmp;
 
-#[derive(Debug, Copy, Clone)]
-pub enum Token {
+#[derive(Debug, Copy, Clone, PartialEq)]
+pub enum TokenType {
    Space,
    Tab,
    NewLine,
@@ -37,83 +36,100 @@ pub enum Token {
    Number,
 }
 
-const REGEX_MAP: [(&'static str, Token); 32] = [
-   (r"^ +",    Token::Space),
-   (r"^\t+",   Token::Tab),
-   (r"^\n",    Token::NewLine),
-   (r"^\*\*",  Token::Power),
-   (r"^==",    Token::Equal),
-   (r"^!=",    Token::Unequal),
-   (r"^<=",    Token::LessEqual),
-   (r"^>=",    Token::GreaterEqual),
-   (r"^\+=",   Token::Increase),
-   (r"^-=",    Token::Decrease),
-   (r"^\.",    Token::Dot),
-   (r"^\^",    Token::Caret),
-   (r"^=",     Token::Assign),
-   (r"^\+",    Token::Add),
-   (r"^-",     Token::Subtract),
-   (r"^\*",    Token::Multiply),
-   (r"^/",     Token::Divide),
-   (r"^\|",    Token::Bar),
-   (r"^:",     Token::Colon),
-   (r"^\(",    Token::ParenLeft),
-   (r"^\)",    Token::ParenRight),
-   (r"^\[",    Token::BracketLeft),
-   (r"^\]",    Token::BracketRight),
-   (r"^<",     Token::AngleLeft),
-   (r"^>",     Token::AngleRight),
-   (r"^\{",    Token::CurlyLeft),
-   (r"^}",     Token::CurlyRight),
-   (r"^#[^\n]",                  Token::Comment),
-   (r"^`(?:\\\)|[^)\s])+",       Token::Accent),
-   (r"^'(?:\\'|[^'])*'",         Token::String),
-   (r"^[_A-Za-z]+[_A-Za-z0-9]*", Token::Ident),
-   (r"^[0-9]+\.*[0-9]*",         Token::Number),
+#[derive(Debug, Copy, Clone, PartialEq)]
+pub struct Token {
+   pub ty: TokenType,
+   pub span: usize,
+   pub pos: usize,
+   pub line: usize,
+   pub col: usize,
+}
+
+const REGEX_MAP: [(&'static str, TokenType); 32] = [
+   (r"^ +",    TokenType::Space),
+   (r"^\t+",   TokenType::Tab),
+   (r"^\n",    TokenType::NewLine),
+   (r"^\*\*",  TokenType::Power),
+   (r"^==",    TokenType::Equal),
+   (r"^!=",    TokenType::Unequal),
+   (r"^<=",    TokenType::LessEqual),
+   (r"^>=",    TokenType::GreaterEqual),
+   (r"^\+=",   TokenType::Increase),
+   (r"^-=",    TokenType::Decrease),
+   (r"^\.",    TokenType::Dot),
+   (r"^\^",    TokenType::Caret),
+   (r"^=",     TokenType::Assign),
+   (r"^\+",    TokenType::Add),
+   (r"^-",     TokenType::Subtract),
+   (r"^\*",    TokenType::Multiply),
+   (r"^/",     TokenType::Divide),
+   (r"^\|",    TokenType::Bar),
+   (r"^:",     TokenType::Colon),
+   (r"^\(",    TokenType::ParenLeft),
+   (r"^\)",    TokenType::ParenRight),
+   (r"^\[",    TokenType::BracketLeft),
+   (r"^\]",    TokenType::BracketRight),
+   (r"^<",     TokenType::AngleLeft),
+   (r"^>",     TokenType::AngleRight),
+   (r"^\{",    TokenType::CurlyLeft),
+   (r"^}",     TokenType::CurlyRight),
+   (r"^#[^\n]",                  TokenType::Comment),
+   (r"^`(?:\\\)|[^)\s])+",       TokenType::Accent),
+   (r"^'(?:\\'|[^'])*'",         TokenType::String),
+   (r"^[_A-Za-z]+[_A-Za-z0-9]*", TokenType::Ident),
+   (r"^[0-9]+\.*[0-9]*",         TokenType::Number),
 ];
 
-pub fn tokenize(mut input: &str) -> Vec<Token> {
-   println!("{:?}", &input[..cmp::min(30, input.len())]);
-
-   let mut count = 0;
+pub fn tokenize(input: &str) -> Vec<Token> {
    let mut tokens = vec![];
 
    let regex_map = get_regex_map();
 
-   while !input.is_empty() {
-      match match_token(input, &regex_map) {
-         Some((token, span)) => {
-            println!("{:?} {}", token, span);
-            tokens.push(token);
-            input = &input[span..];
-            println!("{:?}", &input[..cmp::min(30, input.len())]);
-         },
-         None => panic!("Unrecognized: {:?}", input),
-      }
+   let mut pos = 0;
+   let mut line = 1;
+   let mut col = 1;
 
-      count += 1;
-      if count == 10000 {
-         break;
+   while pos < input.len() {
+      match match_token(&input[pos..], &regex_map) {
+         Some((ty, span)) => {
+            tokens.push(
+               Token {
+                  ty,
+                  span,
+                  pos,
+                  line,
+                  col,
+               }
+            );
+
+            if ty == TokenType::NewLine {
+               line += 1;
+               col = 1;
+            }
+
+            pos += span;
+         },
+         None => panic!("Unrecognized token at line: {}, col: {}", line, col),
       }
    }
 
    tokens
 }
 
-fn get_regex_map() -> Vec<(Regex, Token)> {
+fn get_regex_map() -> Vec<(Regex, TokenType)> {
    let mut regex_map = vec![];
 
-   for &(expression, token) in &REGEX_MAP {
-      regex_map.push((Regex::new(expression).unwrap(), token));
+   for &(expression, ty) in &REGEX_MAP {
+      regex_map.push((Regex::new(expression).unwrap(), ty));
    }
 
    regex_map
 }
 
-fn match_token(input: &str, regex_map: &[(Regex, Token)]) -> Option<(Token, usize)> {
-   for &(ref re, token) in regex_map {
+fn match_token(input: &str, regex_map: &[(Regex, TokenType)]) -> Option<(TokenType, usize)> {
+   for &(ref re, ty) in regex_map {
       if let Some(res) = re.find(input) {
-         return Some((token, res.end()));
+         return Some((ty, res.end()));
       }
    }
 
