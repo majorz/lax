@@ -3,7 +3,6 @@ use regex::Regex;
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub enum TokenType {
    Space,
-   Tab,
    NewLine,
    Power,
    Equal,
@@ -45,9 +44,8 @@ pub struct Token {
    pub col: usize,
 }
 
-const REGEX_MAP: [(&'static str, TokenType); 32] = [
+const REGEX_MAP: [(&'static str, TokenType); 31] = [
    (r"^ +",    TokenType::Space),
-   (r"^\t+",   TokenType::Tab),
    (r"^\n",    TokenType::NewLine),
    (r"^\*\*",  TokenType::Power),
    (r"^==",    TokenType::Equal),

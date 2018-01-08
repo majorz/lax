@@ -7,7 +7,7 @@ use std::fs::File;
 use std::io::prelude::*;
 
 use tokenize::tokenize;
-use parse::parse;
+use parse::Parser;
 
 
 fn main() {
@@ -19,5 +19,11 @@ fn main() {
 
    let tokens = tokenize(&input);
 
-   parse(&tokens);
+/*
+   for (i, token) in tokens.iter().enumerate() {
+      println!("[{}] {:?}", i, token.ty);
+   }
+*/
+
+   Parser::init(&tokens, &input).parse();
 }

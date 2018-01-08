@@ -39,7 +39,6 @@ fn tokenize(input)
 fn match_token(input)
    token matched back = match front(input)
       space : ^space
-      tab   : ^tab
       `\n   : ^new_line
 
       `** : ^power
@@ -81,9 +80,6 @@ fn match_token(input)
 
 fn space()
    one_plus(' ')
-
-fn tab()
-   one_plus(`\t)
 
 fn number()
    [

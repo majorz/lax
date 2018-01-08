@@ -1,74 +1,275 @@
 use tokenize::{TokenType, Token};
 
-type ConsumeFn = fn(&[Token]) -> Option<&[Token]>;
+//const INDENT: usize = 3;
 
-pub fn parse(tokens: &[Token]) {
-   println!("S LEN: {}", tokens.len());
-
-   if let Some(tokens) = consume_empty_lines(tokens) {
-      println!("E LEN: {}", tokens.len());
-   }
+pub struct Parser<'a, 'b> {
+   tokens: &'a [Token],
+   input: &'b str,
 }
 
-fn consume_empty_lines(tokens: &[Token]) -> Option<&[Token]> {
-   consume_repeat(tokens, consume_empty_line)
-}
-
-fn consume_empty_line(tokens: &[Token]) -> Option<&[Token]> {
-   let mut consumed_tokens = tokens;
-
-   if let Some(tokens) = consume_spaces(consumed_tokens) {
-      consumed_tokens = tokens;
+impl<'a, 'b> Parser<'a, 'b> {
+   pub fn init(tokens: &'a [Token], input: &'b str) -> Self {
+      Parser {
+         tokens: tokens,
+         input: input,
+      }
    }
 
-   if let Some(tokens) = consume_new_line(consumed_tokens) {
-      Some(tokens)
-   } else {
+   pub fn parse(&mut self) {
+      let mut current = 0;
+
+      if let Some(pos) = self.consume_empty_lines(current) {
+         current = pos;
+      }
+
+      if let Some(pos) = self.consume_fn(current, 0) {
+         current = pos;
+      }
+
+      let _ = current;
+   }
+
+   fn consume_fn(&self, pos: usize, _indent: usize) -> Option<usize> {
+      let mut current = pos;
+
+      if let Some(pos) = self.consume_fn_def(current) {
+         current = pos;
+      } else {
+         return None;
+      }
+
+      if let Some(pos) = self.consume_fn_body(current) {
+         current = pos;
+      } else {
+         return None;
+      }
+
+      Some(current)
+   }
+
+   fn consume_fn_def(&self, pos: usize) -> Option<usize> {
+      let mut current = pos;
+
+      if let Some(pos) = self.consume_exact_ident(current, "fn") {
+         current = pos;
+      } else {
+         return None;
+      }
+
+      current = self.skip_space(current);
+
+      let name = if let Some((pos, name)) = self.consume_ident(current) {
+         current = pos;
+         name
+      } else {
+         return None;
+      };
+
+      current = self.skip_space(current);
+
+      if let Some(pos) = self.consume_token_type(current, TokenType::ParenLeft) {
+         current = pos;
+      } else {
+         return None;
+      }
+
+      let (pos, args) = self.consume_fn_args(current);
+      current = pos;
+
+      if let Some(pos) = self.consume_token_type(current, TokenType::ParenRight) {
+         current = pos;
+      } else {
+         return None;
+      }
+
+      if let Some(pos) = self.consume_empty_lines(current) {
+         current = pos;
+      } else {
+         return None;
+      }
+
+      println!("[{}-{}] fn {} {:?}", pos, current-1, name, args);
+
+      Some(current)
+   }
+
+   fn consume_fn_args(&self, pos: usize) -> (usize, Vec<&'b str>) {
+      let mut current = pos;
+      let mut args = Vec::new();
+
+      current = self.skip_white_space(current);
+
+      loop {
+         if let Some((pos, ident)) = self.consume_ident(current) {
+            current = pos;
+            args.push(ident);
+
+            current = self.skip_white_space(current)
+         } else {
+            return (current, args);
+         }
+      }
+   }
+
+   fn consume_fn_body(&self, pos: usize) -> Option<usize> {
+      Some(pos)
+   }
+
+   fn consume_exact_ident(&self, pos: usize, ident: &str) -> Option<usize> {
+      if let Some(token) = self.tokens[pos..].first() {
+         if token.ty == TokenType::Ident {
+            if ident.len() == token.span && self.input[token.pos..].starts_with(ident) {
+               println!("[{}] {}", pos, ident);
+               return Some(pos + 1);
+            }
+         }
+      }
+
       None
    }
-}
 
-fn consume_spaces(tokens: &[Token]) -> Option<&[Token]> {
-   consume_repeat(tokens, consume_space)
-}
+   fn consume_ident(&self, pos: usize) -> Option<(usize, &'b str)> {
+      if let Some(token) = self.tokens[pos..].first() {
+         if token.ty == TokenType::Ident {
+            let ident = &self.input[token.pos..token.pos + token.span];
+            println!("[{}] \"{}\"", pos, ident);
+            return Some((pos + 1, ident));
+         }
+      }
 
-fn consume_space(tokens: &[Token]) -> Option<&[Token]> {
-   if let Some(token) = tokens.first() {
-      if token.ty == TokenType::Space || token.ty == TokenType::Tab {
-         return Some(&tokens[1..]);
+      None
+   }
+
+   fn consume_empty_lines(&self, pos: usize) -> Option<usize> {
+      let mut current = pos;
+      let mut consumed = false;
+
+      loop {
+         if let Some(pos) = self.consume_empty_line(current) {
+            current = pos;
+            consumed = true;
+            continue;
+         }
+
+         if consumed {
+            return Some(current);
+         } else {
+            return None;
+         }
       }
    }
 
-   None
-}
+   fn consume_empty_line(&self, pos: usize) -> Option<usize> {
+      let mut current = pos;
 
-fn consume_new_line(tokens: &[Token]) -> Option<&[Token]> {
-   if let Some(token) = tokens.first() {
-      if token.ty == TokenType::NewLine {
-         Some(&tokens[1..])
+      if let Some(pos) = self.consume_token_type(current, TokenType::Space) {
+         current = pos;
+      }
+
+      if let Some(pos) = self.consume_eol_eof(current) {
+         Some(pos)
       } else {
          None
       }
-   } else {
-      Some(tokens)
    }
-}
 
-fn consume_repeat(tokens: &[Token], consume_fn: ConsumeFn) -> Option<&[Token]> {
-   let mut consumed_tokens = tokens;
-   let mut consumed = false;
+/*
+   fn consume_spaces(&self, pos: usize, indent: usize) -> usize {
+      if let Some(adjusted) = self.consume_mandatory_spaces(pos, indent) {
+         adjusted
+      } else {
+         pos
+      }
+   }
 
-   loop {
-      if let Some(tokens) = consume_fn(consumed_tokens) {
-         consumed_tokens = tokens;
+   fn consume_mandatory_spaces(&self, pos: usize, indent: usize) -> Option<usize> {
+      let mut current = pos;
+      let mut consumed = false;
+
+      if let Some(pos) = self.consume_token_type(current, TokenType::Space) {
          consumed = true;
-         continue;
+         current = pos;
       }
 
-      return if consumed {
-         Some(consumed_tokens)
+      if let Some(pos) = self.consume_new_line(current) {
+         if let Some((pos, span)) = self.consume_space(pos) {
+            if (indent + 2) * INDENT == span {
+               println!("[{}] spaces", pos);
+               return Some(pos);
+            }
+         }
+      } else if consumed {
+         return Some(current);
+      }
+
+      None
+   }
+
+   fn consume_space(&self, pos: usize) -> Option<(usize, usize)> {
+      if let Some(token) = self.tokens[pos..].first() {
+         if token.ty == TokenType::Space {
+            println!("[{}] {} spaces", pos, token.span);
+            return Some((pos + 1, token.span));
+         }
+      }
+
+      None
+   }
+*/
+
+   fn consume_eol_eof(&self, pos: usize) -> Option<usize> {
+      if let Some(token) = self.tokens[pos..].first() {
+         if token.ty == TokenType::NewLine {
+            println!("[{}] eol", pos);
+            Some(pos + 1)
+         } else {
+            None
+         }
       } else {
-         None
-      };
+         println!("[{}] eof", pos);
+         Some(pos)
+      }
+   }
+
+   fn consume_token_type(&self, pos: usize, ty: TokenType) -> Option<usize> {
+      if let Some(token) = self.tokens[pos..].first() {
+         if token.ty == ty {
+            println!("[{}] {:?}", pos, ty);
+            return Some(pos + 1);
+         }
+      }
+
+      None
+   }
+
+   fn skip_white_space(&self, pos: usize) -> usize {
+      let mut pos = pos;
+
+      loop {
+         let start = pos;
+
+         pos = self.skip_space(pos);
+
+         pos = self.skip_token_type(pos, TokenType::NewLine);
+
+         if pos == start {
+            return pos;
+         }
+      }
+   }
+
+   fn skip_space(&self, pos: usize) -> usize {
+      self.skip_token_type(pos, TokenType::Space)
+   }
+
+   fn skip_token_type(&self, pos: usize, ty: TokenType) -> usize {
+      if let Some(token) = self.tokens[pos..].first() {
+         if token.ty == ty {
+            println!("[{}] {:?} sk", pos, ty);
+            return pos + 1;
+         }
+      }
+
+      pos
    }
 }
