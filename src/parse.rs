@@ -173,50 +173,6 @@ impl<'a, 'b> Parser<'a, 'b> {
       }
    }
 
-/*
-   fn consume_spaces(&self, pos: usize, indent: usize) -> usize {
-      if let Some(adjusted) = self.consume_mandatory_spaces(pos, indent) {
-         adjusted
-      } else {
-         pos
-      }
-   }
-
-   fn consume_mandatory_spaces(&self, pos: usize, indent: usize) -> Option<usize> {
-      let mut current = pos;
-      let mut consumed = false;
-
-      if let Some(pos) = self.consume_token_type(current, TokenType::Space) {
-         consumed = true;
-         current = pos;
-      }
-
-      if let Some(pos) = self.consume_new_line(current) {
-         if let Some((pos, span)) = self.consume_space(pos) {
-            if (indent + 2) * INDENT == span {
-               println!("[{}] spaces", pos);
-               return Some(pos);
-            }
-         }
-      } else if consumed {
-         return Some(current);
-      }
-
-      None
-   }
-
-   fn consume_space(&self, pos: usize) -> Option<(usize, usize)> {
-      if let Some(token) = self.tokens[pos..].first() {
-         if token.ty == TokenType::Space {
-            println!("[{}] {} spaces", pos, token.span);
-            return Some((pos + 1, token.span));
-         }
-      }
-
-      None
-   }
-*/
-
    fn consume_eol_eof(&self, pos: usize) -> Option<usize> {
       if let Some(token) = self.tokens[pos..].first() {
          if token.ty == TokenType::NewLine {
