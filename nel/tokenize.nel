@@ -13,7 +13,7 @@ fn tokenize(input)
          break
 
       match match_token(next)
-         ^ok token span back:
+         token span back:
             tokens += {
                ^token: token
                ^span: span
@@ -34,12 +34,12 @@ fn tokenize(input)
          ^err:
             ret ^err pos line col
 
-   ^ok tokens
+   tokens
 
 fn match_token(input)
-   token matched back = match front(input)
-      space : ^space
-      `\n   : ^new_line
+   map = {
+      space() : ^space
+      `\n     : ^new_line
 
       `** : ^power
       `== : ^equal
@@ -66,17 +66,22 @@ fn match_token(input)
       `{  : ^curly_right
       `}  : ^curly_left
 
-      comment : ^comment
-      accent  : ^accent
-      string  : ^string
-      ident   : ^ident
-      number  : ^number
+      comment() : ^comment
+      accent()  : ^accent
+      string()  : ^string
+      ident()   : ^ident
+      number()  : ^number
+   }
 
-      _       : ret ^err
+   for key token in map
+      matched = match_front(key input)
+      match matched
+         front back:
+            span = len(front)
 
-   span = len(matched)
+            token span back
 
-   ^ok token span back
+         ^none: ^err
 
 fn space()
    one_plus(' ')
