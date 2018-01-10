@@ -16,18 +16,14 @@ enum Ast {
    Number,
 }
 
-type Res = Result<Option<(usize, Option<Ast>)>, usize>;
-
-fn pos(pos: usize) -> Res {
-   Ok(Some((pos, None)))
-}
+type Res = Result<Option<(usize, Ast)>, usize>;
 
 fn no() -> Res {
    Ok(None)
 }
 
-fn okast(pos: usize, ast: Ast) -> Res {
-   Ok(Some((pos, Some(ast))))
+fn ok(pos: usize, ast: Ast) -> Res {
+   Ok(Some((pos, ast)))
 }
 
 pub struct Parser<'a, 'b> {
@@ -46,35 +42,32 @@ impl<'a, 'b> Parser<'a, 'b> {
    pub fn parse(&self) {
       let mut current = 0;
 
-      if let Some(pos) = self.consume_empty_lines(current) {
+      if let Some(pos) = self.consume_line_ends(current) {
          current = pos;
       }
 
       match self.consume_fn(current, 0) {
          Err(pos) => {
             let token = &self.tokens[pos];
-            println!(
+            let error = format!(
                "[{}] syntax error at line: {}, col: {}",
                pos, token.line, token.col
             );
-            let offset = ::std::cmp::min(10, self.tokens.len() - pos);
-            let slice = &self.tokens[pos..pos + offset];
+            println!("{}", &error);
+            println!("{}", "=".repeat(error.len()));
+
+            let start = pos - ::std::cmp::min(pos, 5);
+            let offset = ::std::cmp::min(11, self.tokens.len() - start);
+            let slice = &self.tokens[start..start + offset];
 
             for (i, token) in slice.iter().enumerate() {
                let name = &self.input[token.pos..token.pos + token.span];
-               println!("[{}] {:?} {:?}", pos+i, token.ty, name);
+               println!("[{}] {:?} {:?}", start+i, token.ty, name);
             }
          },
-         Ok(Some((pos, Some(ast)))) => {
+         Ok(Some((pos, ast))) => {
             println!("[{}] done {:?}", pos, ast);
          }
-         Ok(Some((pos, None))) => {
-            let token = &self.tokens[pos];
-            println!(
-               "[{}] error at line: {}, col: {}",
-               pos, token.line, token.col
-            );
-         },
          Ok(None) => {
             println!("Unreachable");
          }
@@ -84,6 +77,8 @@ impl<'a, 'b> Parser<'a, 'b> {
    }
 
    fn consume_fn(&self, pos: usize, indent: usize) -> Res {
+      println!("[{}] -> fn", pos);
+
       let mut current = pos;
 
       if let Some(pos) = self.consume_fn_def(current) {
@@ -92,13 +87,14 @@ impl<'a, 'b> Parser<'a, 'b> {
          return Err(current);
       }
 
-      if let Some((pos, Some(_ast))) = self.consume_block(current, indent + 1)? {
+      if let Some((pos, _ast)) = self.consume_block(current, indent + 1)? {
          current = pos;
       } else {
+         println!("[{}] no block", current);
          return Err(current);
       }
 
-      okast(current, Ast::Fn)
+      ok(current, Ast::Fn)
    }
 
    fn consume_fn_def(&self, pos: usize) -> Option<usize> {
@@ -136,7 +132,7 @@ impl<'a, 'b> Parser<'a, 'b> {
          return None;
       }
 
-      if let Some(pos) = self.consume_empty_lines(current) {
+      if let Some(pos) = self.consume_line_ends(current) {
          current = pos;
       } else {
          return None;
@@ -166,6 +162,8 @@ impl<'a, 'b> Parser<'a, 'b> {
    }
 
    fn consume_loop(&self, pos: usize, indent: usize) -> Res {
+      println!("[{}] -> loop", pos);
+
       let mut current = pos;
 
       if let Some(pos) = self.consume_exact_ident(current, "loop") {
@@ -174,24 +172,28 @@ impl<'a, 'b> Parser<'a, 'b> {
          return no();
       }
 
-      if let Some(pos) = self.consume_empty_lines(current) {
+      if let Some(pos) = self.consume_line_ends(current) {
          current = pos;
       } else {
+         println!("[{}] no line end", current);
          return Err(current);
       }
 
       println!("[{}-{}] loop", pos, current - 1);
 
-      if let Some((pos, Some(_ast))) = self.consume_block(current, indent + 1)? {
+      if let Some((pos, _ast)) = self.consume_block(current, indent + 1)? {
          current = pos;
       } else {
+         println!("[{}] no block", current);
          return Err(current);
       }
 
-      okast(current, Ast::Loop)
+      ok(current, Ast::Loop)
    }
 
    fn consume_if(&self, pos: usize, indent: usize) -> Res {
+      println!("[{}] -> if", pos);
+
       let mut current = pos;
 
       if let Some(pos) = self.consume_exact_ident(current, "if") {
@@ -202,32 +204,36 @@ impl<'a, 'b> Parser<'a, 'b> {
 
       current = self.skip_space(current);
 
-      if let Some((pos, Some(_ast))) = self.consume_expression(current)? {
+      if let Some((pos, _ast)) = self.consume_expression(current)? {
          current = pos;
       } else {
          return Err(current);
       }
 
-      if let Some(pos) = self.consume_empty_lines(current) {
+      if let Some(pos) = self.consume_line_ends(current) {
          current = pos;
       } else {
+         println!("[{}] no line end", current);
          return Err(current);
       }
 
       println!("[{}-{}] if", pos, current - 1);
 
-      if let Some((pos, Some(_ast))) = self.consume_block(current, indent + 1)? {
+      if let Some((pos, _ast)) = self.consume_block(current, indent + 1)? {
          current = pos;
       } else {
+         println!("[{}] no block", current);
          return Err(current);
       }
 
       println!("[{}-{}] if end", pos, current - 1);
 
-      okast(current, Ast::If)
+      ok(current, Ast::If)
    }
 
    fn consume_match(&self, pos: usize, indent: usize) -> Res {
+      println!("[{}] -> match", pos);
+
       let mut current = pos;
 
       if let Some(pos) = self.consume_exact_ident(current, "match") {
@@ -238,15 +244,16 @@ impl<'a, 'b> Parser<'a, 'b> {
 
       current = self.skip_space(current);
 
-      if let Some((pos, Some(_ast))) = self.consume_expression(current)? {
+      if let Some((pos, _ast)) = self.consume_expression(current)? {
          current = pos;
       } else {
          return Err(current);
       }
 
-      if let Some(pos) = self.consume_empty_lines(current) {
+      if let Some(pos) = self.consume_line_ends(current) {
          current = pos;
       } else {
+         println!("[{}] no line end", current);
          return Err(current);
       }
 
@@ -258,20 +265,25 @@ impl<'a, 'b> Parser<'a, 'b> {
          return Err(current);
       }
 
-      okast(current, Ast::Match)
+      ok(current, Ast::Match)
    }
 
    fn consume_block(&self, pos: usize, indent: usize) -> Res {
+      println!("[{}] -> block", pos);
+
       let mut current = pos;
+      let mut last = current;
       let mut consumed = false;
 
       loop {
-         if let Some((pos, Some(_ast))) = self.consume_statement(current, indent)? {
+         if let Some((pos, _ast)) = self.consume_statement(current, indent)? {
             current = pos;
             consumed = true;
+            println!("[{}-{}] statement", last, current - 1);
+            last = current;
          } else {
             if consumed {
-               return okast(current, Ast::Block);
+               return ok(current, Ast::Block);
             } else {
                return Err(current);
             }
@@ -298,6 +310,8 @@ impl<'a, 'b> Parser<'a, 'b> {
    }
 
    fn consume_match_arm(&self, pos: usize, indent: usize) -> Option<usize> {
+      println!("[{}] -> arm", pos);
+
       let mut current = pos;
 
       let variable = if let Some((pos, ident)) = self.consume_ident(current) {
@@ -317,10 +331,10 @@ impl<'a, 'b> Parser<'a, 'b> {
 
       println!("[{}-{}] {}: ...", pos, current - 1, variable);
 
-      if let Some(pos) = self.consume_empty_lines(current) {
+      if let Some(pos) = self.consume_line_ends(current) {
          current = pos;
 
-         if let Ok(Some((pos, Some(_ast)))) = self.consume_block(current, indent + 1) {
+         if let Ok(Some((pos, _ast))) = self.consume_block(current, indent + 1) {
             current = pos;
          } else {
             return None;
@@ -344,32 +358,29 @@ impl<'a, 'b> Parser<'a, 'b> {
       if let Some(pos) = self.consume_indent_space(current, indent) {
          current = pos;
       } else {
-         return Err(current);
+         return no();
       }
 
       let ast = if let Some(pos) = self.consume_assignment(current, indent) {
          current = pos;
          Ast::Assignment
-      } else if let Some((pos, Some(ast))) = self.consume_loop(current, indent)? {
+      } else if let Some((pos, ast)) = self.consume_loop(current, indent)? {
          current = pos;
          ast
-      } else if let Some((pos, Some(ast))) = self.consume_resulting(current, indent)? {
+      } else if let Some((pos, ast)) = self.consume_resulting(current, indent)? {
          current = pos;
          ast
       } else {
+         println!("[{}] unrecognized", current);
          return Err(current);
       };
 
-      if let Some(pos) = self.consume_empty_lines(current) {
-         current = pos;
-      } else {
-         return Err(current);
-      }
-
-      okast(current, ast)
+      ok(current, ast)
    }
 
    fn consume_assignment(&self, pos: usize, indent: usize) -> Option<usize> {
+      println!("[{}] -> assignment", pos);
+
       let mut current = pos;
 
       let variable = if let Some((pos, ident)) = self.consume_ident(current) {
@@ -401,32 +412,54 @@ impl<'a, 'b> Parser<'a, 'b> {
    }
 
    fn consume_resulting(&self, pos: usize, indent: usize) -> Res {
-      if let Some((pos, Some(ast))) = self.consume_if(pos, indent)? {
-         okast(pos, ast)
-      } else if let Some((pos, Some(ast))) = self.consume_match(pos, indent)? {
-         okast(pos, ast)
-      } else if let Some((pos, Some(ast))) = self.consume_expression(pos)? {
-         okast(pos, ast)
+      if let Some((pos, ast)) = self.consume_if(pos, indent)? {
+         ok(pos, ast)
+      } else if let Some((pos, ast)) = self.consume_match(pos, indent)? {
+         ok(pos, ast)
+      } else if let Some((pos, ast)) = self.consume_end_expression(pos)? {
+         ok(pos, ast)
       } else {
          no()
       }
    }
 
+   fn consume_end_expression(&self, pos: usize) -> Res {
+      let mut current = pos;
+
+      let ast = if let Some((pos, ast)) = self.consume_expression(current)? {
+         current = pos;
+         ast
+      } else {
+         return no();
+      };
+
+      if let Some(pos) = self.consume_line_ends(current) {
+         current = pos;
+      } else {
+         println!("[{}] no line end", current);
+         return Err(current);
+      }
+
+      ok(current, ast)
+   }
+
    fn consume_expression(&self, pos: usize) -> Res {
       if let Some(pos) = self.consume_list(pos) {
-         okast(pos, Ast::List)
+         ok(pos, Ast::List)
       } else if let Some(pos) = self.consume_fn_call(pos) {
-         okast(pos, Ast::FnCall)
+         ok(pos, Ast::FnCall)
       } else if let Some((pos, _ident)) = self.consume_ident(pos) {
-         okast(pos, Ast::Ident)
+         ok(pos, Ast::Ident)
       } else if let Some((pos, _number)) = self.consume_number(pos) {
-         okast(pos, Ast::Number)
+         ok(pos, Ast::Number)
       } else {
          Err(pos)
       }
    }
 
    fn consume_fn_call(&self, pos: usize) -> Option<usize> {
+      println!("[{}] -> fn call", pos);
+
       let mut current = pos;
 
       let name = if let Some((pos, ident)) = self.consume_ident(current) {
@@ -458,6 +491,8 @@ impl<'a, 'b> Parser<'a, 'b> {
    }
 
    fn consume_list(&self, pos: usize) -> Option<usize> {
+      println!("[{}] -> list", pos);
+
       let mut current = pos;
 
       if let Some(pos) = self.consume_token_type(current, TokenType::BracketLeft) {
@@ -485,7 +520,7 @@ impl<'a, 'b> Parser<'a, 'b> {
       current = self.skip_white_space(current);
 
       loop {
-         if let Ok(Some((pos, Some(_ast)))) = self.consume_expression(current) {
+         if let Ok(Some((pos, _ast))) = self.consume_expression(current) {
             current = pos;
 
             current = self.skip_white_space(current)
@@ -500,6 +535,8 @@ impl<'a, 'b> Parser<'a, 'b> {
          if token.ty == TokenType::Space && token.span == indent * INDENT {
             println!("[{}] indent {}", pos, indent);
             return Some(pos + 1);
+         } else {
+            println!("[{}] indent {} != {} * {}", pos, token.span, indent, INDENT);
          }
       }
 
@@ -520,19 +557,23 @@ impl<'a, 'b> Parser<'a, 'b> {
    }
 
    fn consume_ident(&self, pos: usize) -> Option<(usize, &'b str)> {
+      println!("[{}] -> ident", pos);
+
       self.consume_token_string(pos, TokenType::Ident)
    }
 
    fn consume_number(&self, pos: usize) -> Option<(usize, &'b str)> {
+      println!("[{}] -> number", pos);
+
       self.consume_token_string(pos, TokenType::Number)
    }
 
-   fn consume_empty_lines(&self, pos: usize) -> Option<usize> {
+   fn consume_line_ends(&self, pos: usize) -> Option<usize> {
       let mut current = pos;
       let mut consumed = false;
 
       loop {
-         if let Some(pos) = self.consume_empty_line(current) {
+         if let Some(pos) = self.consume_line_end(current) {
             current = pos;
             consumed = true;
             continue;
@@ -546,7 +587,7 @@ impl<'a, 'b> Parser<'a, 'b> {
       }
    }
 
-   fn consume_empty_line(&self, pos: usize) -> Option<usize> {
+   fn consume_line_end(&self, pos: usize) -> Option<usize> {
       let mut current = pos;
 
       if let Some(pos) = self.consume_token_type(current, TokenType::Space) {
@@ -620,7 +661,7 @@ impl<'a, 'b> Parser<'a, 'b> {
    fn skip_token_type(&self, pos: usize, ty: TokenType) -> usize {
       if let Some(token) = self.tokens[pos..].first() {
          if token.ty == ty {
-            println!("[{}] {:?} sk", pos, ty);
+            println!("[{}] -> {:?}", pos, ty);
             return pos + 1;
          }
       }
