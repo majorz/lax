@@ -9,8 +9,10 @@ pub enum TokenType {
    Unequal,
    LessEqual,
    GreaterEqual,
-   Increase,
-   Decrease,
+   AddAssign,
+   SubtractAssign,
+   MultiplyAssign,
+   DivideAssign,
    Dot,
    Caret,
    Assign,
@@ -44,7 +46,7 @@ pub struct Token {
    pub col: usize,
 }
 
-const REGEX_MAP: [(&'static str, TokenType); 31] = [
+const REGEX_MAP: [(&'static str, TokenType); 33] = [
    (r"^ +",    TokenType::Space),
    (r"^\n",    TokenType::NewLine),
    (r"^\*\*",  TokenType::Power),
@@ -52,8 +54,10 @@ const REGEX_MAP: [(&'static str, TokenType); 31] = [
    (r"^!=",    TokenType::Unequal),
    (r"^<=",    TokenType::LessEqual),
    (r"^>=",    TokenType::GreaterEqual),
-   (r"^\+=",   TokenType::Increase),
-   (r"^-=",    TokenType::Decrease),
+   (r"^\+=",   TokenType::AddAssign),
+   (r"^-=",    TokenType::SubtractAssign),
+   (r"^\*=",   TokenType::MultiplyAssign),
+   (r"^/=",    TokenType::DivideAssign),
    (r"^\.",    TokenType::Dot),
    (r"^\^",    TokenType::Caret),
    (r"^=",     TokenType::Assign),
@@ -106,6 +110,7 @@ pub fn tokenize(input: &str) -> Vec<Token> {
             }
 
             pos += span;
+            col += span;
          },
          None => panic!("Unrecognized token at line: {}, col: {}", line, col),
       }
@@ -117,7 +122,7 @@ pub fn tokenize(input: &str) -> Vec<Token> {
 fn get_regex_map() -> Vec<(Regex, TokenType)> {
    let mut regex_map = vec![];
 
-   for &(expression, ty) in &REGEX_MAP {
+   for &(expression, ty) in REGEX_MAP.iter() {
       regex_map.push((Regex::new(expression).unwrap(), ty));
    }
 
