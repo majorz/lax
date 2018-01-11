@@ -46,8 +46,10 @@ fn match_token(input)
       `!= : ^unequal
       `<= : ^less_equal
       `>= : ^greater_equal
-      `+= : ^increase
-      `-= : ^decrease
+      `+= : ^add_assign
+      `-= : ^subtract_assign
+      `*= : ^multiply_assign
+      `/= : ^divide_assign
 
       `.  : ^dot
       `^  : ^caret

@@ -16,6 +16,8 @@ enum Node {
    Match,
    MatchArm,
    MatchBody,
+   Map,
+   MapItem,
    If,
    Loop,
    List,
@@ -50,11 +52,11 @@ impl<'a, 'b> Parser<'a, 'b> {
    pub fn parse(&self) {
       let mut current = 0;
 
-      if let Some(pos) = self.consume_line_ends(current) {
+      if let Some(pos) = self.line_ends(current) {
          current = pos;
       }
 
-      match self.consume_fn(current, 0) {
+      match self.fn_(current, 0) {
          Err(pos) => {
             let token = &self.tokens[pos];
             let error = format!(
@@ -84,18 +86,18 @@ impl<'a, 'b> Parser<'a, 'b> {
       let _ = current;
    }
 
-   fn consume_fn(&self, pos: usize, indent: usize) -> Res {
+   fn fn_(&self, pos: usize, indent: usize) -> Res {
       println!("[{}] -> fn", pos);
 
       let mut current = pos;
 
-      if let Some((pos, _ast)) = self.consume_fn_def(current)? {
+      if let Some((pos, _ast)) = self.fn_def(current)? {
          current = pos;
       } else {
          return no();
       }
 
-      if let Some((pos, _ast)) = self.consume_body(current, indent + 1)? {
+      if let Some((pos, _ast)) = self.body(current, indent + 1)? {
          current = pos;
       } else {
          println!("[{}] expected fn body", current);
@@ -105,10 +107,10 @@ impl<'a, 'b> Parser<'a, 'b> {
       ok(current, Node::Fn)
    }
 
-   fn consume_fn_def(&self, pos: usize) -> Res {
+   fn fn_def(&self, pos: usize) -> Res {
       let mut current = pos;
 
-      if let Some(pos) = self.consume_exact_ident(current, "fn") {
+      if let Some(pos) = self.exact_ident(current, "fn") {
          current = pos;
       } else {
          return no();
@@ -116,7 +118,7 @@ impl<'a, 'b> Parser<'a, 'b> {
 
       current = self.skip_space(current);
 
-      let name = if let Some((pos, ident)) = self.consume_ident(current) {
+      let name = if let Some((pos, ident)) = self.ident(current) {
          current = pos;
          ident
       } else {
@@ -126,24 +128,24 @@ impl<'a, 'b> Parser<'a, 'b> {
 
       current = self.skip_space(current);
 
-      if let Some(pos) = self.consume_token_type(current, TokenType::ParenLeft) {
+      if let Some(pos) = self.token_type(current, TokenType::ParenLeft) {
          current = pos;
       } else {
          println!("[{}] expected (", current);
          return Err(current);
       }
 
-      let (pos, args) = self.consume_fn_args(current);
+      let (pos, args) = self.fn_args(current);
       current = pos;
 
-      if let Some(pos) = self.consume_token_type(current, TokenType::ParenRight) {
+      if let Some(pos) = self.token_type(current, TokenType::ParenRight) {
          current = pos;
       } else {
          println!("[{}] expected )", current);
          return Err(current);
       }
 
-      if let Some(pos) = self.consume_line_ends(current) {
+      if let Some(pos) = self.line_ends(current) {
          current = pos;
       } else {
          println!("[{}] expected new line", current);
@@ -155,14 +157,14 @@ impl<'a, 'b> Parser<'a, 'b> {
       ok(current, Node::FnDef)
    }
 
-   fn consume_fn_args(&self, pos: usize) -> (usize, Vec<&'b str>) {
+   fn fn_args(&self, pos: usize) -> (usize, Vec<&'b str>) {
       let mut current = pos;
       let mut args = Vec::new();
 
       current = self.skip_white_space(current);
 
       loop {
-         if let Some((pos, ident)) = self.consume_ident(current) {
+         if let Some((pos, ident)) = self.ident(current) {
             current = pos;
             args.push(ident);
 
@@ -173,18 +175,18 @@ impl<'a, 'b> Parser<'a, 'b> {
       }
    }
 
-   fn consume_loop(&self, pos: usize, indent: usize) -> Res {
+   fn loop_(&self, pos: usize, indent: usize) -> Res {
       println!("[{}] -> loop", pos);
 
       let mut current = pos;
 
-      if let Some(pos) = self.consume_exact_ident(current, "loop") {
+      if let Some(pos) = self.exact_ident(current, "loop") {
          current = pos;
       } else {
          return no();
       }
 
-      if let Some(pos) = self.consume_line_ends(current) {
+      if let Some(pos) = self.line_ends(current) {
          current = pos;
       } else {
          println!("[{}] expected new line", current);
@@ -193,7 +195,7 @@ impl<'a, 'b> Parser<'a, 'b> {
 
       println!("[{}-{}] loop", pos, current - 1);
 
-      if let Some((pos, _ast)) = self.consume_body(current, indent + 1)? {
+      if let Some((pos, _ast)) = self.body(current, indent + 1)? {
          current = pos;
       } else {
          println!("[{}] expected loop body", current);
@@ -203,12 +205,12 @@ impl<'a, 'b> Parser<'a, 'b> {
       ok(current, Node::Loop)
    }
 
-   fn consume_if(&self, pos: usize, indent: usize) -> Res {
+   fn if_(&self, pos: usize, indent: usize) -> Res {
       println!("[{}] -> if", pos);
 
       let mut current = pos;
 
-      if let Some(pos) = self.consume_exact_ident(current, "if") {
+      if let Some(pos) = self.exact_ident(current, "if") {
          current = pos;
       } else {
          return no();
@@ -216,39 +218,33 @@ impl<'a, 'b> Parser<'a, 'b> {
 
       current = self.skip_space(current);
 
-      if let Some((pos, _ast)) = self.consume_expression(current)? {
+      let ast = if let Some((pos, ast)) = self.end_expression(current)? {
          current = pos;
+         ast
       } else {
          return Err(current);
-      }
+      };
 
-      if let Some(pos) = self.consume_line_ends(current) {
-         current = pos;
-      } else {
-         println!("[{}] expected new line", current);
-         return Err(current);
-      }
+      println!("[{}] if {:?}", pos, ast);
 
-      println!("[{}-{}] if", pos, current - 1);
-
-      if let Some((pos, _ast)) = self.consume_body(current, indent + 1)? {
+      if let Some((pos, _ast)) = self.body(current, indent + 1)? {
          current = pos;
       } else {
          println!("[{}] expected if body", current);
          return Err(current);
       }
 
-      println!("[{}-{}] if end", pos, current - 1);
+      println!("[{}-{}] if ...", pos, current - 1);
 
       ok(current, Node::If)
    }
 
-   fn consume_match(&self, pos: usize, indent: usize) -> Res {
+   fn match_(&self, pos: usize, indent: usize) -> Res {
       println!("[{}] -> match", pos);
 
       let mut current = pos;
 
-      if let Some(pos) = self.consume_exact_ident(current, "match") {
+      if let Some(pos) = self.exact_ident(current, "match") {
          current = pos;
       } else {
          return no();
@@ -256,22 +252,15 @@ impl<'a, 'b> Parser<'a, 'b> {
 
       current = self.skip_space(current);
 
-      if let Some((pos, _ast)) = self.consume_expression(current)? {
+      if let Some((pos, _ast)) = self.end_expression(current)? {
          current = pos;
       } else {
-         return Err(current);
-      }
-
-      if let Some(pos) = self.consume_line_ends(current) {
-         current = pos;
-      } else {
-         println!("[{}] expected new line", current);
          return Err(current);
       }
 
       println!("[{}-{}] match", pos, current - 1);
 
-      if let Some((pos, _ast)) = self.consume_match_arms(current, indent + 1)? {
+      if let Some((pos, _ast)) = self.match_arms(current, indent + 1)? {
          current = pos;
       } else {
          return Err(current);
@@ -280,7 +269,7 @@ impl<'a, 'b> Parser<'a, 'b> {
       ok(current, Node::Match)
    }
 
-   fn consume_body(&self, pos: usize, indent: usize) -> Res {
+   fn body(&self, pos: usize, indent: usize) -> Res {
       println!("[{}] -> body", pos);
 
       let mut current = pos;
@@ -288,7 +277,7 @@ impl<'a, 'b> Parser<'a, 'b> {
       let mut consumed = false;
 
       loop {
-         if let Some((pos, _ast)) = self.consume_statement(current, indent)? {
+         if let Some((pos, _ast)) = self.statement(current, indent)? {
             current = pos;
             consumed = true;
             println!("[{}-{}] statement", last, current - 1);
@@ -303,12 +292,12 @@ impl<'a, 'b> Parser<'a, 'b> {
       }
    }
 
-   fn consume_match_arms(&self, pos: usize, indent: usize) -> Res {
+   fn match_arms(&self, pos: usize, indent: usize) -> Res {
       let mut current = pos;
       let mut consumed = false;
 
       loop {
-         if let Some((pos, _ast)) = self.consume_match_arm(current, indent)? {
+         if let Some((pos, _ast)) = self.match_arm(current, indent)? {
             current = pos;
             consumed = true;
          } else {
@@ -322,18 +311,18 @@ impl<'a, 'b> Parser<'a, 'b> {
       }
    }
 
-   fn consume_match_arm(&self, pos: usize, indent: usize) -> Res {
+   fn match_arm(&self, pos: usize, indent: usize) -> Res {
       println!("[{}] -> arm", pos);
 
       let mut current = pos;
 
-      if let Some(pos) = self.consume_indent_space(current, indent) {
+      if let Some(pos) = self.indent_space(current, indent) {
          current = pos;
       } else {
          return no();
       }
 
-      if let Some(pos) = self.consume_pattern(current) {
+      if let Some(pos) = self.pattern(current) {
          current = pos;
       } else {
          println!("[{}] expected pattern", current);
@@ -342,7 +331,7 @@ impl<'a, 'b> Parser<'a, 'b> {
 
       current = self.skip_space(current);
 
-      if let Some(pos) = self.consume_token_type(current, TokenType::Colon) {
+      if let Some(pos) = self.token_type(current, TokenType::Colon) {
          current = pos;
       } else {
          println!("[{}] expected :", current);
@@ -351,10 +340,10 @@ impl<'a, 'b> Parser<'a, 'b> {
 
       println!("[{}-{}] pattern: ...", pos, current - 1);
 
-      if let Some(pos) = self.consume_line_ends(current) {
+      if let Some(pos) = self.line_ends(current) {
          current = pos;
 
-         if let Some((pos, _ast)) = self.consume_body(current, indent + 1)? {
+         if let Some((pos, _ast)) = self.body(current, indent + 1)? {
             current = pos;
          } else {
             println!("[{}] expected fn body", current);
@@ -363,7 +352,7 @@ impl<'a, 'b> Parser<'a, 'b> {
       } else {
          current = self.skip_space(current);
 
-         if let Ok(Some((pos, _))) = self.consume_resulting(current, indent) {
+         if let Ok(Some((pos, _))) = self.resulting(current, indent) {
             current = pos;
          } else {
             println!("[{}] expected statement", current);
@@ -374,22 +363,22 @@ impl<'a, 'b> Parser<'a, 'b> {
       ok(current, Node::MatchArm)
    }
 
-   fn consume_statement(&self, pos: usize, indent: usize) -> Res {
+   fn statement(&self, pos: usize, indent: usize) -> Res {
       let mut current = pos;
 
-      if let Some(pos) = self.consume_indent_space(current, indent) {
+      if let Some(pos) = self.indent_space(current, indent) {
          current = pos;
       } else {
          return no();
       }
 
-      let ast = if let Some((pos, ast)) = self.consume_assign(current, indent)? {
+      let ast = if let Some((pos, ast)) = self.assign(current, indent)? {
          current = pos;
          ast
-      } else if let Some((pos, ast)) = self.consume_loop(current, indent)? {
+      } else if let Some((pos, ast)) = self.loop_(current, indent)? {
          current = pos;
          ast
-      } else if let Some((pos, ast)) = self.consume_resulting(current, indent)? {
+      } else if let Some((pos, ast)) = self.resulting(current, indent)? {
          current = pos;
          ast
       } else {
@@ -400,10 +389,10 @@ impl<'a, 'b> Parser<'a, 'b> {
       ok(current, ast)
    }
 
-   fn consume_assign(&self, pos: usize, indent: usize) -> Res {
+   fn assign(&self, pos: usize, indent: usize) -> Res {
       let mut current = pos;
 
-      let variable = if let Some((pos, ident)) = self.consume_ident(current) {
+      let variable = if let Some((pos, ident)) = self.ident(current) {
          current = pos;
          ident
       } else {
@@ -412,27 +401,27 @@ impl<'a, 'b> Parser<'a, 'b> {
 
       current = self.skip_space(current);
 
-      let ast = if let Some((pos, ast)) = self.consume_assign_type(
+      let ast = if let Some((pos, ast)) = self.assign_type(
          current, indent, TokenType::Assign, Node::Assign
       )? {
          current = pos;
          ast
-      } else if let Some((pos, ast)) = self.consume_assign_type(
+      } else if let Some((pos, ast)) = self.assign_type(
          current, indent, TokenType::AddAssign, Node::AddAssign
       )? {
          current = pos;
          ast
-      } else if let Some((pos, ast)) = self.consume_assign_type(
+      } else if let Some((pos, ast)) = self.assign_type(
          current, indent, TokenType::SubtractAssign, Node::SubtractAssign
       )? {
          current = pos;
          ast
-      } else if let Some((pos, ast)) = self.consume_assign_type(
+      } else if let Some((pos, ast)) = self.assign_type(
          current, indent, TokenType::MultiplyAssign, Node::MultiplyAssign
       )? {
          current = pos;
          ast
-      } else if let Some((pos, ast)) = self.consume_assign_type(
+      } else if let Some((pos, ast)) = self.assign_type(
          current, indent, TokenType::DivideAssign, Node::DivideAssign
       )? {
          current = pos;
@@ -446,12 +435,12 @@ impl<'a, 'b> Parser<'a, 'b> {
       ok(current, ast)
    }
 
-   fn consume_assign_type(&self, pos: usize, indent: usize, ty: TokenType, node: Node) -> Res {
+   fn assign_type(&self, pos: usize, indent: usize, ty: TokenType, node: Node) -> Res {
       println!("[{}] -> assign type {:?}", pos, ty);
 
       let mut current = pos;
 
-      if let Some(pos) = self.consume_token_type(current, ty) {
+      if let Some(pos) = self.token_type(current, ty) {
          current = pos;
       } else {
          return no();
@@ -459,7 +448,7 @@ impl<'a, 'b> Parser<'a, 'b> {
 
       current = self.skip_space(current);
 
-      if let Some((pos, _ast)) = self.consume_resulting(current, indent)? {
+      if let Some((pos, _ast)) = self.resulting(current, indent)? {
          current = pos;
       } else {
          println!("[{}] expected statement", current);
@@ -469,29 +458,29 @@ impl<'a, 'b> Parser<'a, 'b> {
       ok(current, node)
    }
 
-   fn consume_resulting(&self, pos: usize, indent: usize) -> Res {
-      if let Some((pos, ast)) = self.consume_if(pos, indent)? {
+   fn resulting(&self, pos: usize, indent: usize) -> Res {
+      if let Some((pos, ast)) = self.if_(pos, indent)? {
          ok(pos, ast)
-      } else if let Some((pos, ast)) = self.consume_match(pos, indent)? {
+      } else if let Some((pos, ast)) = self.match_(pos, indent)? {
          ok(pos, ast)
-      } else if let Some((pos, ast)) = self.consume_end_expression(pos)? {
+      } else if let Some((pos, ast)) = self.end_expression(pos)? {
          ok(pos, ast)
       } else {
          no()
       }
    }
 
-   fn consume_end_expression(&self, pos: usize) -> Res {
+   fn end_expression(&self, pos: usize) -> Res {
       let mut current = pos;
 
-      let ast = if let Some((pos, ast)) = self.consume_expression(current)? {
+      let ast = if let Some((pos, ast)) = self.expression(current)? {
          current = pos;
          ast
       } else {
          return no();
       };
 
-      if let Some(pos) = self.consume_line_ends(current) {
+      if let Some(pos) = self.line_ends(current) {
          current = pos;
       } else {
          println!("[{}] expected new line", current);
@@ -501,115 +490,209 @@ impl<'a, 'b> Parser<'a, 'b> {
       ok(current, ast)
    }
 
-   fn consume_expression(&self, pos: usize) -> Res {
-      if let Some(pos) = self.consume_list(pos) {
-         ok(pos, Node::List)
-      } else if let Some(pos) = self.consume_fn_call(pos) {
-         ok(pos, Node::FnCall)
-      } else if let Some((pos, _ident)) = self.consume_ident(pos) {
+   fn expression(&self, pos: usize) -> Res {
+      if let Some((pos, ast)) = self.fn_call(pos)? {
+         ok(pos, ast)
+      } else if let Some((pos, _ident)) = self.ident(pos) {
          ok(pos, Node::Ident)
-      } else if let Some((pos, ast)) = self.consume_value(pos)? {
+      } else if let Some((pos, ast)) = self.value(pos)? {
+         ok(pos, ast)
+      } else if let Some((pos, ast)) = self.list(pos)? {
+         ok(pos, ast)
+      } else if let Some((pos, ast)) = self.map(pos)? {
          ok(pos, ast)
       } else {
          no()
       }
    }
 
-   fn consume_value(&self, pos: usize) -> Res {
-      if let Some((pos, _number)) = self.consume_number(pos) {
+   fn value(&self, pos: usize) -> Res {
+      if let Some((pos, _number)) = self.number(pos) {
+         println!("[{}] {}", pos, _number);
          ok(pos, Node::Number)
-      } else if let Some((pos, _ident)) = self.consume_symbol(pos) {
+      } else if let Some((pos, _ident)) = self.symbol(pos) {
+         println!("[{}] ^{}", pos, _ident);
          ok(pos, Node::Symbol)
       } else {
          no()
       }
    }
 
-   fn consume_fn_call(&self, pos: usize) -> Option<usize> {
+   fn fn_call(&self, pos: usize) -> Res {
       println!("[{}] -> fn call", pos);
 
       let mut current = pos;
 
-      let name = if let Some((pos, ident)) = self.consume_ident(current) {
+      let name = if let Some((pos, ident)) = self.ident(current) {
          current = pos;
          ident
       } else {
-         return None;
+         return no();
       };
 
       current = self.skip_space(current);
 
-      if let Some(pos) = self.consume_token_type(current, TokenType::ParenLeft) {
+      if let Some(pos) = self.token_type(current, TokenType::ParenLeft) {
          current = pos;
       } else {
-         return None;
+         return no();
       }
 
-      current = self.consume_list_expressions(current);
+      let _ast = if let Some((pos, ast)) = self.list_items(current)? {
+         current = pos;
+         ast
+      } else {
+         return Err(current);
+      };
 
-      if let Some(pos) = self.consume_token_type(current, TokenType::ParenRight) {
+      if let Some(pos) = self.token_type(current, TokenType::ParenRight) {
          current = pos;
       } else {
-         return None;
+         println!("[{}] expected )", current);
+         return Err(current);
       }
 
-      println!("[{}-{}] {}(..)", pos, current - 1, name);
+      println!("[{}-{}] {}(...)", pos, current - 1, name);
 
-      Some(current)
+      ok(current, Node::FnCall)
    }
 
-   fn consume_list(&self, pos: usize) -> Option<usize> {
+   fn list(&self, pos: usize) -> Res {
       println!("[{}] -> list", pos);
 
       let mut current = pos;
 
-      if let Some(pos) = self.consume_token_type(current, TokenType::BracketLeft) {
+      if let Some(pos) = self.token_type(current, TokenType::BracketLeft) {
          current = pos;
       } else {
-         return None;
+         return no();
       }
 
-      current = self.consume_list_expressions(current);
+      let ast = if let Some((pos, ast)) = self.list_items(current)? {
+         current = pos;
+         ast
+      } else {
+         return Err(current);
+      };
 
-      if let Some(pos) = self.consume_token_type(current, TokenType::BracketRight) {
+      if let Some(pos) = self.token_type(current, TokenType::BracketRight) {
          current = pos;
       } else {
-         return None;
+         println!("[{}] expected ]", current);
+         return Err(current);
       }
 
-      println!("[{}-{}] [..]", pos, current - 1);
+      println!("[{}-{}] [...]", pos, current - 1);
 
-      Some(current)
+      ok(current, ast)
    }
 
-   fn consume_list_expressions(&self, pos: usize) -> usize {
+   fn list_items(&self, pos: usize) -> Res {
       let mut current = pos;
 
       current = self.skip_white_space(current);
 
       loop {
-         if let Ok(Some((pos, _ast))) = self.consume_expression(current) {
+         if let Some((pos, _ast)) = self.expression(current)? {
             current = pos;
 
             current = self.skip_white_space(current)
          } else {
-            return current;
+            return ok(current, Node::List);
          }
       }
    }
 
-   fn consume_pattern(&self, pos: usize) -> Option<usize> {
+   fn map(&self, pos: usize) -> Res {
+      println!("[{}] -> map", pos);
+
+      let mut current = pos;
+
+      if let Some(pos) = self.token_type(current, TokenType::CurlyLeft) {
+         current = pos;
+      } else {
+         return no();
+      }
+
+      let ast = if let Some((pos, ast)) = self.map_items(current)? {
+         current = pos;
+         ast
+      } else {
+         return Err(current);
+      };
+
+      if let Some(pos) = self.token_type(current, TokenType::CurlyRight) {
+         current = pos;
+      } else {
+         println!("[{}] expected }}", current);
+         return Err(current);
+      }
+
+      println!("[{}-{}] {{...}}", pos, current - 1);
+
+      ok(current, ast)
+   }
+
+   fn map_items(&self, pos: usize) -> Res {
+      let mut current = pos;
+
+      current = self.skip_white_space(current);
+
+      loop {
+         if let Some((pos, _ast)) = self.map_key_value(current)? {
+            current = pos;
+         } else {
+            return ok(current, Node::Map);
+         }
+      }
+   }
+
+   fn map_key_value(&self, pos: usize) -> Res {
+      let mut current = pos;
+
+      let _key_ast = if let Some((pos, ast)) = self.expression(current)? {
+         current = pos;
+         ast
+      } else {
+         return no();
+      };
+
+      current = self.skip_space(current);
+
+      if let Some(pos) = self.token_type(current, TokenType::Colon) {
+         current = pos;
+      } else {
+         println!("[{}] expected :", current);
+         return Err(current);
+      }
+
+      current = self.skip_space(current);
+
+      let _value_ast = if let Some((pos, ast)) = self.expression(current)? {
+         current = pos;
+         ast
+      } else {
+         println!("[{}] expected expression", current);
+         return Err(current);
+      };
+
+      current = self.skip_white_space(current);
+
+      ok(current, Node::MapItem)
+   }
+
+   fn pattern(&self, pos: usize) -> Option<usize> {
       let mut current = pos;
       let mut consumed = false;
 
       current = self.skip_white_space(current);
 
       loop {
-         if let Some((pos, _ident)) = self.consume_ident(current) {
+         if let Some((pos, _ident)) = self.ident(current) {
             current = pos;
             consumed = true;
             current = self.skip_white_space(current)
-         } else if let Ok(Some((pos, _ident))) = self.consume_value(current) {
+         } else if let Ok(Some((pos, _ident))) = self.value(current) {
             current = pos;
             consumed = true;
             current = self.skip_white_space(current)
@@ -623,7 +706,7 @@ impl<'a, 'b> Parser<'a, 'b> {
       }
    }
 
-   fn consume_indent_space(&self, pos: usize, indent: usize) -> Option<usize> {
+   fn indent_space(&self, pos: usize, indent: usize) -> Option<usize> {
       if let Some(token) = self.tokens[pos..].first() {
          if token.ty == TokenType::Space && token.span == indent * INDENT {
             println!("[{}] indent {}", pos, indent);
@@ -636,7 +719,7 @@ impl<'a, 'b> Parser<'a, 'b> {
       None
    }
 
-   fn consume_exact_ident(&self, pos: usize, ident: &str) -> Option<usize> {
+   fn exact_ident(&self, pos: usize, ident: &str) -> Option<usize> {
       if let Some(token) = self.tokens[pos..].first() {
          if token.ty == TokenType::Ident {
             if ident.len() == token.span && self.input[token.pos..].starts_with(ident) {
@@ -649,34 +732,34 @@ impl<'a, 'b> Parser<'a, 'b> {
       None
    }
 
-   fn consume_ident(&self, pos: usize) -> Option<(usize, &'b str)> {
+   fn ident(&self, pos: usize) -> Option<(usize, &'b str)> {
       println!("[{}] -> ident", pos);
 
-      self.consume_token_string(pos, TokenType::Ident)
+      self.token_string(pos, TokenType::Ident)
    }
 
-   fn consume_number(&self, pos: usize) -> Option<(usize, &'b str)> {
+   fn number(&self, pos: usize) -> Option<(usize, &'b str)> {
       println!("[{}] -> number", pos);
 
-      self.consume_token_string(pos, TokenType::Number)
+      self.token_string(pos, TokenType::Number)
    }
 
-   fn consume_symbol(&self, pos: usize) -> Option<(usize, &'b str)> {
+   fn symbol(&self, pos: usize) -> Option<(usize, &'b str)> {
       println!("[{}] -> symbol", pos);
 
-      if let Some(pos) = self.consume_token_type(pos, TokenType::Caret) {
-         self.consume_token_string(pos, TokenType::Ident)
+      if let Some(pos) = self.token_type(pos, TokenType::Caret) {
+         self.token_string(pos, TokenType::Ident)
       } else {
          None
       }
    }
 
-   fn consume_line_ends(&self, pos: usize) -> Option<usize> {
+   fn line_ends(&self, pos: usize) -> Option<usize> {
       let mut current = pos;
       let mut consumed = false;
 
       loop {
-         if let Some(pos) = self.consume_line_end(current) {
+         if let Some(pos) = self.line_end(current) {
             current = pos;
             consumed = true;
             continue;
@@ -690,21 +773,21 @@ impl<'a, 'b> Parser<'a, 'b> {
       }
    }
 
-   fn consume_line_end(&self, pos: usize) -> Option<usize> {
+   fn line_end(&self, pos: usize) -> Option<usize> {
       let mut current = pos;
 
-      if let Some(pos) = self.consume_token_type(current, TokenType::Space) {
+      if let Some(pos) = self.token_type(current, TokenType::Space) {
          current = pos;
       }
 
-      if let Some(pos) = self.consume_eol_eof(current) {
+      if let Some(pos) = self.eol_eof(current) {
          Some(pos)
       } else {
          None
       }
    }
 
-   fn consume_eol_eof(&self, pos: usize) -> Option<usize> {
+   fn eol_eof(&self, pos: usize) -> Option<usize> {
       if let Some(token) = self.tokens[pos..].first() {
          if token.ty == TokenType::NewLine {
             println!("[{}] eol", pos);
@@ -718,7 +801,7 @@ impl<'a, 'b> Parser<'a, 'b> {
       }
    }
 
-   fn consume_token_string(&self, pos: usize, ty: TokenType) -> Option<(usize, &'b str)> {
+   fn token_string(&self, pos: usize, ty: TokenType) -> Option<(usize, &'b str)> {
       if let Some(token) = self.tokens[pos..].first() {
          if token.ty == ty {
             let ident = &self.input[token.pos..token.pos + token.span];
@@ -730,7 +813,7 @@ impl<'a, 'b> Parser<'a, 'b> {
       None
    }
 
-   fn consume_token_type(&self, pos: usize, ty: TokenType) -> Option<usize> {
+   fn token_type(&self, pos: usize, ty: TokenType) -> Option<usize> {
       if let Some(token) = self.tokens[pos..].first() {
          if token.ty == ty {
             println!("[{}] {:?}", pos, ty);
