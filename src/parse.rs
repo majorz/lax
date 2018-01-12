@@ -13,6 +13,10 @@ enum Node {
    SubtractAssign,
    MultiplyAssign,
    DivideAssign,
+   Equal,
+   Unequal,
+   LessEqual,
+   GreaterEqual,
    Match,
    MatchArm,
    MatchBody,
@@ -355,7 +359,7 @@ impl<'a, 'b> Parser<'a, 'b> {
          if let Ok(Some((pos, _))) = self.resulting(current, indent) {
             current = pos;
          } else {
-            println!("[{}] expected statement", current);
+            println!("[{}] expected expression", current);
             return Err(current);
          }
       }
@@ -451,8 +455,61 @@ impl<'a, 'b> Parser<'a, 'b> {
       if let Some((pos, _ast)) = self.resulting(current, indent)? {
          current = pos;
       } else {
-         println!("[{}] expected statement", current);
+         println!("[{}] expected expression", current);
          return Err(current);
+      }
+
+      ok(current, node)
+   }
+
+   fn binary_right(&self, pos: usize) -> Res {
+      let mut current = pos;
+
+      let ast = if let Some((pos, ast)) = self.binary_type(
+         current, TokenType::Equal, Node::Equal
+      )? {
+         current = pos;
+         ast
+      } else if let Some((pos, ast)) = self.binary_type(
+         current, TokenType::Unequal, Node::Unequal
+      )? {
+         current = pos;
+         ast
+      } else if let Some((pos, ast)) = self.binary_type(
+         current, TokenType::LessEqual, Node::LessEqual
+      )? {
+         current = pos;
+         ast
+      } else if let Some((pos, ast)) = self.binary_type(
+         current, TokenType::GreaterEqual, Node::GreaterEqual
+      )? {
+         current = pos;
+         ast
+      } else {
+         return no();
+      };
+
+      current = self.skip_space(current);
+
+      if let Some((pos, _ast)) = self.expression(current)? {
+         current = pos;
+      } else {
+         println!("[{}] expected expression", current);
+         return Err(current);
+      }
+
+      ok(current, ast)
+   }
+
+   fn binary_type(&self, pos: usize, ty: TokenType, node: Node) -> Res {
+      println!("[{}] -> binary type {:?}", pos, ty);
+
+      let mut current = pos;
+
+      if let Some(pos) = self.token_type(current, ty) {
+         current = pos;
+      } else {
+         return no();
       }
 
       ok(current, node)
@@ -491,18 +548,33 @@ impl<'a, 'b> Parser<'a, 'b> {
    }
 
    fn expression(&self, pos: usize) -> Res {
-      if let Some((pos, ast)) = self.fn_call(pos)? {
-         ok(pos, ast)
-      } else if let Some((pos, _ident)) = self.ident(pos) {
-         ok(pos, Node::Ident)
-      } else if let Some((pos, ast)) = self.value(pos)? {
-         ok(pos, ast)
-      } else if let Some((pos, ast)) = self.list(pos)? {
-         ok(pos, ast)
-      } else if let Some((pos, ast)) = self.map(pos)? {
+      let mut current = pos;
+
+      let ast = if let Some((pos, ast)) = self.fn_call(current)? {
+         current = pos;
+         ast
+      } else if let Some((pos, _ident)) = self.ident(current) {
+         current = pos;
+         Node::Ident
+      } else if let Some((pos, ast)) = self.value(current)? {
+         current = pos;
+         ast
+      } else if let Some((pos, ast)) = self.list(current)? {
+         current = pos;
+         ast
+      } else if let Some((pos, ast)) = self.map(current)? {
+         current = pos;
+         ast
+      } else {
+         return no();
+      };
+
+      current = self.skip_space(current);
+
+      if let Some((pos, ast)) = self.binary_right(current)? {
          ok(pos, ast)
       } else {
-         no()
+         ok(current, ast)
       }
    }
 
