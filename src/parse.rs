@@ -28,6 +28,7 @@ enum Node {
    Ident,
    Number,
    Symbol,
+   Break,
 }
 
 type Res = Result<Option<(usize, Node)>, usize>;
@@ -126,7 +127,7 @@ impl<'a, 'b> Parser<'a, 'b> {
    fn fn_def(&self, pos: usize) -> Res {
       let mut current = pos;
 
-      if let Some(pos) = self.exact_ident(current, "fn") {
+      if let Some(pos) = self.token_type(current, TokenType::Fn) {
          current = pos;
       } else {
          return no();
@@ -196,7 +197,7 @@ impl<'a, 'b> Parser<'a, 'b> {
 
       let mut current = pos;
 
-      if let Some(pos) = self.exact_ident(current, "loop") {
+      if let Some(pos) = self.token_type(current, TokenType::Loop) {
          current = pos;
       } else {
          return no();
@@ -226,7 +227,7 @@ impl<'a, 'b> Parser<'a, 'b> {
 
       let mut current = pos;
 
-      if let Some(pos) = self.exact_ident(current, "if") {
+      if let Some(pos) = self.token_type(current, TokenType::If) {
          current = pos;
       } else {
          return no();
@@ -260,7 +261,7 @@ impl<'a, 'b> Parser<'a, 'b> {
 
       let mut current = pos;
 
-      if let Some(pos) = self.exact_ident(current, "match") {
+      if let Some(pos) = self.token_type(current, TokenType::Match) {
          current = pos;
       } else {
          return no();
@@ -568,6 +569,9 @@ impl<'a, 'b> Parser<'a, 'b> {
       } else if let Some((pos, _ident)) = self.ident(current) {
          current = pos;
          Node::Ident
+      } else if let Some((pos, ast)) = self.break_(current)? {
+         current = pos;
+         ast
       } else if let Some((pos, ast)) = self.value(current)? {
          current = pos;
          ast
@@ -639,6 +643,16 @@ impl<'a, 'b> Parser<'a, 'b> {
       println!("[{}-{}] {}(...)", pos, current - 1, name);
 
       ok(current, Node::FnCall)
+   }
+
+   fn break_(&self, pos: usize) -> Res {
+      println!("[{}] -> break", pos);
+
+      if let Some(pos) = self.token_type(pos, TokenType::Break) {
+         ok(pos, Node::Break)
+      } else {
+         no()
+      }
    }
 
    fn list(&self, pos: usize) -> Res {
@@ -791,25 +805,12 @@ impl<'a, 'b> Parser<'a, 'b> {
    }
 
    fn indent_space(&self, pos: usize, indent: usize) -> Option<usize> {
-      if let Some(token) = self.tokens[pos..].first() {
+      if let Some(token) = self.tokens.get(pos) {
          if token.ty == TokenType::Space && token.span == indent * INDENT {
             println!("[{}] indent {}", pos, indent);
             return Some(pos + 1);
          } else {
             println!("[{}] indent {} != {} * {}", pos, token.span, indent, INDENT);
-         }
-      }
-
-      None
-   }
-
-   fn exact_ident(&self, pos: usize, ident: &str) -> Option<usize> {
-      if let Some(token) = self.tokens[pos..].first() {
-         if token.ty == TokenType::Ident {
-            if ident.len() == token.span && self.input[token.pos..].starts_with(ident) {
-               println!("[{}] {}", pos, ident);
-               return Some(pos + 1);
-            }
          }
       }
 
@@ -826,16 +827,6 @@ impl<'a, 'b> Parser<'a, 'b> {
       println!("[{}] -> number", pos);
 
       self.token_string(pos, TokenType::Number)
-   }
-
-   fn symbol(&self, pos: usize) -> Option<(usize, &'b str)> {
-      println!("[{}] -> symbol", pos);
-
-      if let Some(pos) = self.token_type(pos, TokenType::Caret) {
-         self.token_string(pos, TokenType::Ident)
-      } else {
-         None
-      }
    }
 
    fn line_ends(&self, pos: usize) -> Option<usize> {
@@ -872,7 +863,7 @@ impl<'a, 'b> Parser<'a, 'b> {
    }
 
    fn eol_eof(&self, pos: usize) -> Option<usize> {
-      if let Some(token) = self.tokens[pos..].first() {
+      if let Some(token) = self.tokens.get(pos) {
          if token.ty == TokenType::NewLine {
             println!("[{}] eol", pos);
             Some(pos + 1)
@@ -885,8 +876,22 @@ impl<'a, 'b> Parser<'a, 'b> {
       }
    }
 
+   fn symbol(&self, pos: usize) -> Option<(usize, &'b str)> {
+      println!("[{}] -> symbol", pos);
+
+      if let Some(token) = self.tokens.get(pos) {
+         if token.ty == TokenType::Symbol {
+            let ident = &self.input[token.pos + 1..token.pos + token.span];
+            println!("[{}] ^{}", pos, ident);
+            return Some((pos + 1, ident));
+         }
+      }
+
+      None
+   }
+
    fn token_string(&self, pos: usize, ty: TokenType) -> Option<(usize, &'b str)> {
-      if let Some(token) = self.tokens[pos..].first() {
+      if let Some(token) = self.tokens.get(pos) {
          if token.ty == ty {
             let ident = &self.input[token.pos..token.pos + token.span];
             println!("[{}] {:?} \"{}\"", pos, ty, ident);
@@ -898,7 +903,7 @@ impl<'a, 'b> Parser<'a, 'b> {
    }
 
    fn token_type(&self, pos: usize, ty: TokenType) -> Option<usize> {
-      if let Some(token) = self.tokens[pos..].first() {
+      if let Some(token) = self.tokens.get(pos) {
          if token.ty == ty {
             println!("[{}] {:?}", pos, ty);
             return Some(pos + 1);
@@ -929,7 +934,7 @@ impl<'a, 'b> Parser<'a, 'b> {
    }
 
    fn skip_token_type(&self, pos: usize, ty: TokenType) -> usize {
-      if let Some(token) = self.tokens[pos..].first() {
+      if let Some(token) = self.tokens.get(pos) {
          if token.ty == ty {
             println!("[{}] -> {:?}", pos, ty);
             return pos + 1;

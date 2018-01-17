@@ -14,7 +14,6 @@ pub enum TokenType {
    MultiplyAssign,
    DivideAssign,
    Dot,
-   Caret,
    Assign,
    Add,
    Subtract,
@@ -34,7 +33,21 @@ pub enum TokenType {
    Accent,
    String,
    Ident,
+   Symbol,
    Number,
+   Fn,
+   Loop,
+   Match,
+   If,
+   Ef,
+   El,
+   Break,
+   Ret,
+   For,
+   In,
+   And,
+   Or,
+   Not,
 }
 
 #[derive(Debug, Copy, Clone, PartialEq)]
@@ -59,7 +72,6 @@ const REGEX_MAP: [(&'static str, TokenType); 33] = [
    (r"^\*=",   TokenType::MultiplyAssign),
    (r"^/=",    TokenType::DivideAssign),
    (r"^\.",    TokenType::Dot),
-   (r"^\^",    TokenType::Caret),
    (r"^=",     TokenType::Assign),
    (r"^\+",    TokenType::Add),
    (r"^-",     TokenType::Subtract),
@@ -75,11 +87,28 @@ const REGEX_MAP: [(&'static str, TokenType); 33] = [
    (r"^>",     TokenType::AngleRight),
    (r"^\{",    TokenType::CurlyLeft),
    (r"^}",     TokenType::CurlyRight),
-   (r"^#[^\n]",                  TokenType::Comment),
-   (r"^`(?:\\\)|[^)\s])+",       TokenType::Accent),
-   (r"^'(?:\\'|[^'])*'",         TokenType::String),
-   (r"^[_A-Za-z]+[_A-Za-z0-9]*", TokenType::Ident),
-   (r"^[0-9]+\.*[0-9]*",         TokenType::Number),
+   (r"^#[^\n]",                    TokenType::Comment),
+   (r"^`(?:\\\)|[^)\s])+",         TokenType::Accent),
+   (r"^'(?:\\'|[^'])*'",           TokenType::String),
+   (r"^[_A-Za-z]+[_A-Za-z0-9]*",   TokenType::Ident),
+   (r"^\^[_A-Za-z]+[_A-Za-z0-9]*", TokenType::Symbol),
+   (r"^[0-9]+\.*[0-9]*",           TokenType::Number),
+];
+
+const KEYWORD_MAP: [(&'static str, TokenType); 13] = [
+   ("fn",     TokenType::Fn),
+   ("loop",   TokenType::Loop),
+   ("match",  TokenType::Match),
+   ("if",     TokenType::If),
+   ("ef",     TokenType::Ef),
+   ("el",     TokenType::El),
+   ("break",  TokenType::Break),
+   ("ret",    TokenType::Ret),
+   ("for",    TokenType::For),
+   ("in",     TokenType::In),
+   ("and",    TokenType::And),
+   ("or",     TokenType::Or),
+   ("not",    TokenType::Not),
 ];
 
 pub fn tokenize(input: &str) -> Vec<Token> {
@@ -94,6 +123,8 @@ pub fn tokenize(input: &str) -> Vec<Token> {
    while pos < input.len() {
       match match_token(&input[pos..], &regex_map) {
          Some((ty, span)) => {
+            let ty = try_ident_as_keyword(&input[pos..pos+span], ty);
+
             tokens.push(
                Token {
                   ty,
@@ -137,4 +168,18 @@ fn match_token(input: &str, regex_map: &[(Regex, TokenType)]) -> Option<(TokenTy
    }
 
    None
+}
+
+fn try_ident_as_keyword(input: &str, ty: TokenType) -> TokenType {
+   if ty != TokenType::Ident {
+      return ty;
+   }
+
+   for &(keyword, keyword_ty) in KEYWORD_MAP.iter() {
+      if keyword == input {
+         return keyword_ty;
+      }
+   }
+
+   ty
 }
