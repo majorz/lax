@@ -437,6 +437,9 @@ impl<'a, 'b> Parser<'a, 'b> {
       } else if let Some((pos, ast)) = self.loop_(current, indent)? {
          current = pos;
          ast
+      } else if let Some((pos, ast)) = self.break_(current)? {
+         current = pos;
+         ast
       } else if let Some((pos, ast)) = self.resulting(current, indent)? {
          current = pos;
          ast
@@ -611,9 +614,6 @@ impl<'a, 'b> Parser<'a, 'b> {
       } else if let Some((pos, _ident)) = self.ident(current) {
          current = pos;
          Node::Ident
-      } else if let Some((pos, ast)) = self.break_(current)? {
-         current = pos;
-         ast
       } else if let Some((pos, ast)) = self.value(current)? {
          current = pos;
          ast
@@ -690,11 +690,22 @@ impl<'a, 'b> Parser<'a, 'b> {
    fn break_(&self, pos: usize) -> Res {
       println!("[{}] -> break", pos);
 
-      if let Some(pos) = self.token_type(pos, TokenType::Break) {
-         ok(pos, Node::Break)
+      let mut current = pos;
+
+      if let Some(pos) = self.token_type(current, TokenType::Break) {
+         current = pos;
       } else {
-         no()
+         return no();
       }
+
+      if let Some(pos) = self.line_ends(current) {
+         current = pos;
+      } else {
+         println!("[{}] expected new line", current);
+         return Err(current);
+      }
+
+      ok(current, Node::Break)
    }
 
    fn list(&self, pos: usize) -> Res {
