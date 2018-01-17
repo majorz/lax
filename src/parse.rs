@@ -30,6 +30,7 @@ enum Node {
    Ident,
    Number,
    Symbol,
+   String,
    Break,
 }
 
@@ -677,6 +678,9 @@ impl<'a, 'b> Parser<'a, 'b> {
       } else if let Some((pos, _ident)) = self.symbol(pos) {
          println!("[{}] ^{}", pos, _ident);
          ok(pos, Node::Symbol)
+      } else if let Some((pos, _ident)) = self.accent(pos) {
+         println!("[{}] `{}", pos, _ident);
+         ok(pos, Node::String)
       } else {
          no()
       }
@@ -977,6 +981,20 @@ impl<'a, 'b> Parser<'a, 'b> {
          println!("[{}] eof", pos);
          Some(pos)
       }
+   }
+
+   fn accent(&self, pos: usize) -> Option<(usize, &'b str)> {
+      println!("[{}] -> accent", pos);
+
+      if let Some(token) = self.tokens.get(pos) {
+         if token.ty == TokenType::Accent {
+            let string = &self.input[token.pos + 1..token.pos + token.span];
+            println!("[{}] `{}", pos, string);
+            return Some((pos + 1, string));
+         }
+      }
+
+      None
    }
 
    fn symbol(&self, pos: usize) -> Option<(usize, &'b str)> {
