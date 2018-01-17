@@ -60,34 +60,46 @@ impl<'a, 'b> Parser<'a, 'b> {
          current = pos;
       }
 
-      match self.fn_(current, 0) {
-         Err(pos) => {
-            let token = &self.tokens[pos];
-            let error = format!(
-               "[{}] syntax error at line: {}, col: {}",
-               pos, token.line, token.col
-            );
-            println!("{}", &error);
-            println!("{}", "=".repeat(error.len()));
-
-            let start = pos - ::std::cmp::min(pos, 5);
-            let offset = ::std::cmp::min(11, self.tokens.len() - start);
-            let slice = &self.tokens[start..start + offset];
-
-            for (i, token) in slice.iter().enumerate() {
-               let name = &self.input[token.pos..token.pos + token.span];
-               println!("[{}] {:?} {:?}", start+i, token.ty, name);
+      loop {
+         match self.fn_(current, 0) {
+            Err(pos) => {
+               self.error(pos);
+               return;
+            },
+            Ok(Some((pos, ast))) => {
+               current = pos;
+               println!("[{}] done {:?}", pos, ast);
             }
-         },
-         Ok(Some((pos, ast))) => {
-            println!("[{}] done {:?}", pos, ast);
+            Ok(None) => {
+               println!("Unreachable");
+               self.error(current);
+               return;
+            }
          }
-         Ok(None) => {
-            println!("Unreachable");
+
+         if let Some(pos) = self.line_ends(current) {
+            current = pos;
          }
       }
+   }
 
-      let _ = current;
+   fn error(&self, pos: usize) {
+      let token = &self.tokens[pos];
+      let error = format!(
+         "[{}] syntax error at line: {}, col: {}",
+         pos, token.line, token.col
+      );
+      println!("{}", &error);
+      println!("{}", "=".repeat(error.len()));
+
+      let start = pos - ::std::cmp::min(pos, 5);
+      let offset = ::std::cmp::min(11, self.tokens.len() - start);
+      let slice = &self.tokens[start..start + offset];
+
+      for (i, token) in slice.iter().enumerate() {
+         let name = &self.input[token.pos..token.pos + token.span];
+         println!("[{}] {:?} {:?}", start+i, token.ty, name);
+      }
    }
 
    fn fn_(&self, pos: usize, indent: usize) -> Res {
