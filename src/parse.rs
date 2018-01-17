@@ -8,6 +8,7 @@ enum Node {
    FnDef,
    FnCall,
    Body,
+   Ret,
    Assign,
    AddAssign,
    SubtractAssign,
@@ -440,6 +441,9 @@ impl<'a, 'b> Parser<'a, 'b> {
       } else if let Some((pos, ast)) = self.break_(current)? {
          current = pos;
          ast
+      } else if let Some((pos, ast)) = self.ret(current)? {
+         current = pos;
+         ast
       } else if let Some((pos, ast)) = self.resulting(current, indent)? {
          current = pos;
          ast
@@ -449,6 +453,36 @@ impl<'a, 'b> Parser<'a, 'b> {
       };
 
       ok(current, ast)
+   }
+
+   fn ret(&self, pos: usize) -> Res {
+      println!("[{}] -> ret", pos);
+
+      let mut current = pos;
+
+      if let Some(pos) = self.token_type(current, TokenType::Ret) {
+         current = pos;
+      } else {
+         return no();
+      }
+
+      current = self.skip_space(current);
+
+      let _ast = if let Some((pos, ast)) = self.list_items(current)? {
+         current = pos;
+         ast
+      } else {
+         return Err(current);
+      };
+
+      if let Some(pos) = self.line_ends(current) {
+         current = pos;
+      } else {
+         println!("[{}] expected new line", current);
+         return Err(current);
+      }
+
+      ok(current, Node::Ret)
    }
 
    fn assign(&self, pos: usize, indent: usize) -> Res {
