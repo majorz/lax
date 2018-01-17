@@ -468,7 +468,7 @@ impl<'a, 'b> Parser<'a, 'b> {
 
       current = self.skip_space(current);
 
-      let _ast = if let Some((pos, ast)) = self.list_items(current)? {
+      let _ast = if let Some((pos, ast)) = self.single_line_list_items(current)? {
          current = pos;
          ast
       } else {
@@ -782,6 +782,22 @@ impl<'a, 'b> Parser<'a, 'b> {
             current = pos;
 
             current = self.skip_white_space(current)
+         } else {
+            return ok(current, Node::List);
+         }
+      }
+   }
+
+   fn single_line_list_items(&self, pos: usize) -> Res {
+      let mut current = pos;
+
+      current = self.skip_space(current);
+
+      loop {
+         if let Some((pos, _ast)) = self.expression(current)? {
+            current = pos;
+
+            current = self.skip_space(current)
          } else {
             return ok(current, Node::List);
          }
