@@ -23,6 +23,7 @@ enum Node {
    Map,
    MapItem,
    If,
+   El,
    Loop,
    List,
    Ident,
@@ -251,9 +252,49 @@ impl<'a, 'b> Parser<'a, 'b> {
          return Err(current);
       }
 
+      if let Some((pos, _ast)) = self.el(current, indent)? {
+         current = pos;
+      }
+
       println!("[{}-{}] if ...", pos, current - 1);
 
       ok(current, Node::If)
+   }
+
+   fn el(&self, pos: usize, indent: usize) -> Res {
+      println!("[{}] -> el", pos);
+
+      let mut current = pos;
+
+      if let Some(pos) = self.indent_space(current, indent) {
+         current = pos;
+      } else {
+         return no();
+      }
+
+      if let Some(pos) = self.token_type(current, TokenType::El) {
+         current = pos;
+      } else {
+         return no();
+      }
+
+      if let Some(pos) = self.line_ends(current) {
+         current = pos;
+      } else {
+         println!("[{}] expected new line", current);
+         return Err(current);
+      }
+
+      println!("[{}-{}] el", pos, current - 1);
+
+      if let Some((pos, _ast)) = self.body(current, indent + 1)? {
+         current = pos;
+      } else {
+         println!("[{}] expected loop body", current);
+         return Err(current);
+      }
+
+      ok(current, Node::El)
    }
 
    fn match_(&self, pos: usize, indent: usize) -> Res {
@@ -301,6 +342,7 @@ impl<'a, 'b> Parser<'a, 'b> {
             last = current;
          } else {
             if consumed {
+               println!("[{}-{}] body ...", pos, current - 1);
                return ok(current, Node::Body);
             } else {
                return Err(current);
