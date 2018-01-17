@@ -25,6 +25,7 @@ enum Node {
    MapItem,
    If,
    El,
+   For,
    Loop,
    List,
    Ident,
@@ -329,30 +330,6 @@ impl<'a, 'b> Parser<'a, 'b> {
       ok(current, Node::Match)
    }
 
-   fn body(&self, pos: usize, indent: usize) -> Res {
-      println!("[{}] -> body", pos);
-
-      let mut current = pos;
-      let mut last = current;
-      let mut consumed = false;
-
-      loop {
-         if let Some((pos, _ast)) = self.statement(current, indent)? {
-            current = pos;
-            consumed = true;
-            println!("[{}-{}] statement", last, current - 1);
-            last = current;
-         } else {
-            if consumed {
-               println!("[{}-{}] body ...", pos, current - 1);
-               return ok(current, Node::Body);
-            } else {
-               return Err(current);
-            }
-         }
-      }
-   }
-
    fn match_arms(&self, pos: usize, indent: usize) -> Res {
       let mut current = pos;
       let mut consumed = false;
@@ -424,6 +401,78 @@ impl<'a, 'b> Parser<'a, 'b> {
       ok(current, Node::MatchArm)
    }
 
+   fn for_(&self, pos: usize, indent: usize) -> Res {
+      println!("[{}] -> for", pos);
+
+      let mut current = pos;
+
+      if let Some(pos) = self.token_type(current, TokenType::For) {
+         current = pos;
+      } else {
+         return no();
+      }
+
+      current = self.skip_space(current);
+
+      if let Some(pos) = self.pattern(current) {
+         current = pos;
+      } else {
+         println!("[{}] expected pattern", current);
+         return Err(current);
+      }
+
+      current = self.skip_space(current);
+
+      if let Some(pos) = self.token_type(current, TokenType::In) {
+         current = pos;
+      } else {
+         println!("[{}] expected in", current);
+         return Err(current);
+      }
+
+      current = self.skip_space(current);
+
+      let ast = if let Some((pos, ast)) = self.end_expression(current)? {
+         current = pos;
+         ast
+      } else {
+         return Err(current);
+      };
+
+      if let Some((pos, _ast)) = self.body(current, indent + 1)? {
+         current = pos;
+      } else {
+         println!("[{}] expected for body", current);
+         return Err(current);
+      }
+
+      ok(current, Node::For)
+   }
+
+   fn body(&self, pos: usize, indent: usize) -> Res {
+      println!("[{}] -> body", pos);
+
+      let mut current = pos;
+      let mut last = current;
+      let mut consumed = false;
+
+      loop {
+         if let Some((pos, _ast)) = self.statement(current, indent)? {
+            current = pos;
+            consumed = true;
+            println!("[{}-{}] statement", last, current - 1);
+            last = current;
+         } else {
+            if consumed {
+               println!("[{}-{}] body ...", pos, current - 1);
+               return ok(current, Node::Body);
+            } else {
+               return Err(current);
+            }
+         }
+      }
+   }
+
    fn statement(&self, pos: usize, indent: usize) -> Res {
       let mut current = pos;
 
@@ -434,6 +483,9 @@ impl<'a, 'b> Parser<'a, 'b> {
       }
 
       let ast = if let Some((pos, ast)) = self.assign(current, indent)? {
+         current = pos;
+         ast
+      } else if let Some((pos, ast)) = self.for_(current, indent)? {
          current = pos;
          ast
       } else if let Some((pos, ast)) = self.loop_(current, indent)? {
