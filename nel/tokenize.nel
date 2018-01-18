@@ -50,6 +50,7 @@ fn match_token(input)
       `-= : ^subtract_assign
       `*= : ^multiply_assign
       `/= : ^divide_assign
+      `.. : ^range
 
       `.  : ^dot
       `^  : ^caret
