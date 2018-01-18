@@ -804,6 +804,9 @@ impl<'a, 'b> Parser<'a, 'b> {
       } else if let Some((pos, _ident)) = self.accent(pos) {
          println!("[{}] `{}", pos, _ident);
          ok(pos, Node::String)
+      } else if let Some((pos, _ident)) = self.string(pos) {
+         println!("[{}] '{}'", pos, _ident);
+         ok(pos, Node::String)
       } else {
          no()
       }
@@ -1113,6 +1116,20 @@ impl<'a, 'b> Parser<'a, 'b> {
          if token.ty == TokenType::Accent {
             let string = &self.input[token.pos + 1..token.pos + token.span];
             println!("[{}] `{}", pos, string);
+            return Some((pos + 1, string));
+         }
+      }
+
+      None
+   }
+
+   fn string(&self, pos: usize) -> Option<(usize, &'b str)> {
+      println!("[{}] -> string", pos);
+
+      if let Some(token) = self.tokens.get(pos) {
+         if token.ty == TokenType::String {
+            let string = &self.input[token.pos + 1..token.pos + token.span - 1];
+            println!("[{}] '{}'", pos, string);
             return Some((pos + 1, string));
          }
       }
