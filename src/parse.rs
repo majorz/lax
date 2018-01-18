@@ -23,11 +23,15 @@ enum Node {
    Subtract,
    Multiply,
    Divide,
+   Range,
    Match,
    MatchArm,
    MatchBody,
    Map,
    MapItem,
+   And,
+   Or,
+   Not,
    If,
    El,
    For,
@@ -38,6 +42,7 @@ enum Node {
    Symbol,
    String,
    Break,
+   Parens,
 }
 
 type Res = Result<Option<(usize, Node)>, usize>;
@@ -85,6 +90,11 @@ impl<'a, 'b> Parser<'a, 'b> {
                self.error(current);
                return;
             }
+         }
+
+         if current == self.tokens.len() {
+            println!("[{}] [{}] END", current, self.tokens.len());
+            return;
          }
 
          if let Some(pos) = self.line_ends(current) {
@@ -702,6 +712,45 @@ impl<'a, 'b> Parser<'a, 'b> {
       )? {
          current = pos;
          ast
+      } else if let Some((pos, ast)) = self.binary_type(
+         current, TokenType::Or, Node::Or
+      )? {
+         current = pos;
+         ast
+      } else if let Some((pos, ast)) = self.binary_type(
+         current, TokenType::And, Node::And
+      )? {
+         current = pos;
+         ast
+      } else if let Some((pos, ast)) = self.binary_type(
+         current, TokenType::Range, Node::Range
+      )? {
+         current = pos;
+         ast
+      } else {
+         return no();
+      };
+
+      current = self.skip_space(current);
+
+      if let Some((pos, _ast)) = self.expression(current)? {
+         current = pos;
+      } else {
+         println!("[{}] expected expression", current);
+         return Err(current);
+      }
+
+      ok(current, ast)
+   }
+
+   fn unary(&self, pos: usize) -> Res {
+      let mut current = pos;
+
+      let ast = if let Some((pos, ast)) = self.binary_type(
+         current, TokenType::Not, Node::Not
+      )? {
+         current = pos;
+         ast
       } else {
          return no();
       };
@@ -769,10 +818,16 @@ impl<'a, 'b> Parser<'a, 'b> {
       let ast = if let Some((pos, ast)) = self.fn_call(current)? {
          current = pos;
          ast
+      } else if let Some((pos, ast)) = self.unary(current)? {
+         current = pos;
+         ast
       } else if let Some((pos, _ident)) = self.ident(current) {
          current = pos;
          Node::Ident
       } else if let Some((pos, ast)) = self.value(current)? {
+         current = pos;
+         ast
+      } else if let Some((pos, ast)) = self.parens(current)? {
          current = pos;
          ast
       } else if let Some((pos, ast)) = self.list(current)? {
@@ -872,8 +927,38 @@ impl<'a, 'b> Parser<'a, 'b> {
       ok(current, Node::Break)
    }
 
+   fn parens(&self, pos: usize) -> Res {
+      println!("[{}] -> ()", pos);
+
+      let mut current = pos;
+
+      if let Some(pos) = self.token_type(current, TokenType::ParenLeft) {
+         current = pos;
+      } else {
+         return no();
+      }
+
+      let _ast = if let Some((pos, ast)) = self.expression(current)? {
+         current = pos;
+         ast
+      } else {
+         return Err(current);
+      };
+
+      if let Some(pos) = self.token_type(current, TokenType::ParenRight) {
+         current = pos;
+      } else {
+         println!("[{}] expected )", current);
+         return Err(current);
+      }
+
+      println!("[{}-{}] (...)", pos, current - 1);
+
+      ok(current, Node::Parens)
+   }
+
    fn list(&self, pos: usize) -> Res {
-      println!("[{}] -> list", pos);
+      println!("[{}] -> []", pos);
 
       let mut current = pos;
 
@@ -935,7 +1020,7 @@ impl<'a, 'b> Parser<'a, 'b> {
    }
 
    fn map(&self, pos: usize) -> Res {
-      println!("[{}] -> map", pos);
+      println!("[{}] -> {{}}", pos);
 
       let mut current = pos;
 
@@ -1070,6 +1155,13 @@ impl<'a, 'b> Parser<'a, 'b> {
          if let Some(pos) = self.line_end(current) {
             current = pos;
             consumed = true;
+
+            assert!(current < self.tokens.len() + 1);
+
+            if current == self.tokens.len() {
+               return Some(current)
+            }
+
             continue;
          }
 

@@ -13,12 +13,16 @@ pub enum TokenType {
    SubtractAssign,
    MultiplyAssign,
    DivideAssign,
+   Range,
    Dot,
    Assign,
    Add,
    Subtract,
    Multiply,
    Divide,
+   And,
+   Or,
+   Not,
    Bar,
    Colon,
    ParenLeft,
@@ -45,9 +49,6 @@ pub enum TokenType {
    Ret,
    For,
    In,
-   And,
-   Or,
-   Not,
 }
 
 #[derive(Debug, Copy, Clone, PartialEq)]
@@ -59,7 +60,7 @@ pub struct Token {
    pub col: usize,
 }
 
-const REGEX_MAP: [(&'static str, TokenType); 33] = [
+const REGEX_MAP: [(&'static str, TokenType); 34] = [
    (r"^ +",    TokenType::Space),
    (r"^\n",    TokenType::NewLine),
    (r"^\*\*",  TokenType::Power),
@@ -71,6 +72,7 @@ const REGEX_MAP: [(&'static str, TokenType); 33] = [
    (r"^-=",    TokenType::SubtractAssign),
    (r"^\*=",   TokenType::MultiplyAssign),
    (r"^/=",    TokenType::DivideAssign),
+   (r"^\.\.",  TokenType::Range),
    (r"^\.",    TokenType::Dot),
    (r"^=",     TokenType::Assign),
    (r"^\+",    TokenType::Add),
