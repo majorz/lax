@@ -9,6 +9,7 @@ enum Node {
    FnCall,
    Body,
    Ret,
+   RetList,
    Assign,
    AddAssign,
    SubtractAssign,
@@ -18,6 +19,10 @@ enum Node {
    Unequal,
    LessEqual,
    GreaterEqual,
+   Add,
+   Subtract,
+   Multiply,
+   Divide,
    Match,
    MatchArm,
    MatchBody,
@@ -169,7 +174,7 @@ impl<'a, 'b> Parser<'a, 'b> {
       if let Some(pos) = self.line_ends(current) {
          current = pos;
       } else {
-         println!("[{}] expected new line", current);
+         println!("[{}] expected new line on fn", current);
          return Err(current);
       }
 
@@ -210,7 +215,7 @@ impl<'a, 'b> Parser<'a, 'b> {
       if let Some(pos) = self.line_ends(current) {
          current = pos;
       } else {
-         println!("[{}] expected new line", current);
+         println!("[{}] expected new line on loop", current);
          return Err(current);
       }
 
@@ -284,7 +289,7 @@ impl<'a, 'b> Parser<'a, 'b> {
       if let Some(pos) = self.line_ends(current) {
          current = pos;
       } else {
-         println!("[{}] expected new line", current);
+         println!("[{}] expected new line on el", current);
          return Err(current);
       }
 
@@ -432,7 +437,7 @@ impl<'a, 'b> Parser<'a, 'b> {
 
       current = self.skip_space(current);
 
-      let ast = if let Some((pos, ast)) = self.end_expression(current)? {
+      let _ast = if let Some((pos, ast)) = self.end_expression(current)? {
          current = pos;
          ast
       } else {
@@ -500,6 +505,9 @@ impl<'a, 'b> Parser<'a, 'b> {
       } else if let Some((pos, ast)) = self.resulting(current, indent)? {
          current = pos;
          ast
+      } else if let Some((pos, ast)) = self.ret_list(current)? {
+         current = pos;
+         ast
       } else {
          println!("[{}] unrecognized", current);
          return Err(current);
@@ -531,11 +539,55 @@ impl<'a, 'b> Parser<'a, 'b> {
       if let Some(pos) = self.line_ends(current) {
          current = pos;
       } else {
-         println!("[{}] expected new line", current);
+         println!("[{}] expected new line on ret", current);
          return Err(current);
       }
 
       ok(current, Node::Ret)
+   }
+
+   fn ret_list(&self, pos: usize) -> Res {
+      println!("[{}] -> ret list", pos);
+
+      let mut current = pos;
+
+      let _ast = if let Some((pos, ast)) = self.ret_list_items(current)? {
+         current = pos;
+         ast
+      } else {
+         return no();
+      };
+
+      if let Some(pos) = self.line_ends(current) {
+         current = pos;
+      } else {
+         println!("[{}] expected new line on ret list", current);
+         return Err(current);
+      }
+
+      ok(current, Node::RetList)
+   }
+
+   fn ret_list_items(&self, pos: usize) -> Res {
+      let mut current = pos;
+      let mut consumed = 0;
+
+      current = self.skip_space(current);
+
+      loop {
+         if let Some((pos, _ast)) = self.expression(current)? {
+            current = pos;
+            consumed += 1;
+
+            current = self.skip_space(current)
+         } else {
+            if consumed >= 2 {
+               return ok(current, Node::RetList);
+            } else {
+               return no()
+            }
+         }
+      }
    }
 
    fn assign(&self, pos: usize, indent: usize) -> Res {
@@ -585,7 +637,7 @@ impl<'a, 'b> Parser<'a, 'b> {
    }
 
    fn assign_type(&self, pos: usize, indent: usize, ty: TokenType, node: Node) -> Res {
-      println!("[{}] -> assign type {:?}", pos, ty);
+      println!("[{}] -> {:?}", pos, ty);
 
       let mut current = pos;
 
@@ -630,6 +682,26 @@ impl<'a, 'b> Parser<'a, 'b> {
       )? {
          current = pos;
          ast
+      } else if let Some((pos, ast)) = self.binary_type(
+         current, TokenType::Add, Node::Add
+      )? {
+         current = pos;
+         ast
+      } else if let Some((pos, ast)) = self.binary_type(
+         current, TokenType::Subtract, Node::Subtract
+      )? {
+         current = pos;
+         ast
+      } else if let Some((pos, ast)) = self.binary_type(
+         current, TokenType::Multiply, Node::Multiply
+      )? {
+         current = pos;
+         ast
+      } else if let Some((pos, ast)) = self.binary_type(
+         current, TokenType::Divide, Node::Divide
+      )? {
+         current = pos;
+         ast
       } else {
          return no();
       };
@@ -647,7 +719,7 @@ impl<'a, 'b> Parser<'a, 'b> {
    }
 
    fn binary_type(&self, pos: usize, ty: TokenType, node: Node) -> Res {
-      println!("[{}] -> binary type {:?}", pos, ty);
+      println!("[{}] -> {:?}", pos, ty);
 
       let mut current = pos;
 
@@ -685,8 +757,7 @@ impl<'a, 'b> Parser<'a, 'b> {
       if let Some(pos) = self.line_ends(current) {
          current = pos;
       } else {
-         println!("[{}] expected new line", current);
-         return Err(current);
+         return no();
       }
 
       ok(current, ast)
@@ -791,7 +862,7 @@ impl<'a, 'b> Parser<'a, 'b> {
       if let Some(pos) = self.line_ends(current) {
          current = pos;
       } else {
-         println!("[{}] expected new line", current);
+         println!("[{}] expected new line on break", current);
          return Err(current);
       }
 
