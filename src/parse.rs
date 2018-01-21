@@ -6,7 +6,7 @@ const INDENT: usize = 3;
 enum Node {
    Fn,
    FnCall,
-   Body,
+   Block,
    Ret,
    RetList,
    Assign,
@@ -124,7 +124,7 @@ impl<'a, 'b> Parser<'a, 'b> {
          } else {
             if consumed {
                println!("[{}-{}] block ...", pos, current - 1);
-               return ok(current, Node::Body);
+               return ok(current, Node::Block);
             } else {
                return Err(current);
             }
