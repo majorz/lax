@@ -1,13 +1,10 @@
-extern crate regex;
-
-mod tokenize;
-mod parse;
+extern crate nel;
 
 use std::fs::File;
 use std::io::prelude::*;
 
-use tokenize::tokenize;
-use parse::Parser;
+use nel::tokenize::tokenize;
+use nel::parse::Parser;
 
 
 fn main() {
