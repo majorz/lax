@@ -5,7 +5,6 @@ const INDENT: usize = 3;
 #[derive(Debug, Copy, Clone, PartialEq)]
 enum Node {
    Fn,
-   FnDef,
    FnCall,
    Body,
    Ret,
@@ -75,32 +74,19 @@ impl<'a, 'b> Parser<'a, 'b> {
          current = pos;
       }
 
-      loop {
-         let fn_start = current;
-
-         match self.fn_(current, 0) {
-            Err(pos) => {
-               self.error(pos);
-               return;
-            },
-            Ok(Some((pos, ast))) => {
-               current = pos;
-               println!("[{}-{}] done {:?}", fn_start, current, ast);
-            }
-            Ok(None) => {
-               println!("Unreachable");
-               self.error(current);
-               return;
-            }
-         }
-
-         if current == self.tokens.len() {
-            println!("[{}] [{}] END", current, self.tokens.len());
+      match self.block(current, 0) {
+         Err(pos) => {
+            self.error(pos);
             return;
-         }
-
-         if let Some(pos) = self.line_ends(current) {
+         },
+         Ok(Some((pos, ast))) => {
             current = pos;
+            println!("[{}] done {:?}", current, ast);
+         }
+         Ok(None) => {
+            println!("Unreachable");
+            self.error(current);
+            return;
          }
       }
    }
@@ -124,26 +110,69 @@ impl<'a, 'b> Parser<'a, 'b> {
       }
    }
 
-   fn fn_(&self, pos: usize, indent: usize) -> Res {
+   fn block(&self, pos: usize, indent: usize) -> Res {
+      let mut current = pos;
+      let mut last = current;
+      let mut consumed = false;
+
+      loop {
+         if let Some((pos, _ast)) = self.statement(current, indent)? {
+            current = pos;
+            consumed = true;
+            println!("[{}-{}] statement", last, current - 1);
+            last = current;
+         } else {
+            if consumed {
+               println!("[{}-{}] block ...", pos, current - 1);
+               return ok(current, Node::Body);
+            } else {
+               return Err(current);
+            }
+         }
+      }
+   }
+
+   fn statement(&self, pos: usize, indent: usize) -> Res {
       let mut current = pos;
 
-      if let Some((pos, _ast)) = self.fn_def(current)? {
+      if let Some(pos) = self.indent_space(current, indent) {
          current = pos;
       } else {
          return no();
       }
 
-      if let Some((pos, _ast)) = self.body(current, indent + 1)? {
+      let ast = if let Some((pos, ast)) = self.fn_(current, indent)? {
          current = pos;
+         ast
+      } else if let Some((pos, ast)) = self.for_(current, indent)? {
+         current = pos;
+         ast
+      } else if let Some((pos, ast)) = self.loop_(current, indent)? {
+         current = pos;
+         ast
+      } else if let Some((pos, ast)) = self.break_(current)? {
+         current = pos;
+         ast
+      } else if let Some((pos, ast)) = self.ret(current)? {
+         current = pos;
+         ast
+      } else if let Some((pos, ast)) = self.assign(current, indent)? {
+         current = pos;
+         ast
+      } else if let Some((pos, ast)) = self.resulting(current, indent)? {
+         current = pos;
+         ast
+      } else if let Some((pos, ast)) = self.ret_list(current)? {
+         current = pos;
+         ast
       } else {
-         println!("[{}] expected fn body", current);
-         return Err(current);
-      }
+         return no();
+      };
 
-      ok(current, Node::Fn)
+      ok(current, ast)
    }
 
-   fn fn_def(&self, pos: usize) -> Res {
+   fn fn_(&self, pos: usize, indent: usize) -> Res {
       let mut current = pos;
 
       if let Some(pos) = self.token_type(current, TokenType::Fn) {
@@ -190,7 +219,14 @@ impl<'a, 'b> Parser<'a, 'b> {
 
       println!("[{}] fn {}()", pos, name);
 
-      ok(current, Node::FnDef)
+      if let Some((pos, _ast)) = self.block(current, indent + 1)? {
+         current = pos;
+      } else {
+         println!("[{}] expected fn block", current);
+         return Err(current);
+      }
+
+      ok(current, Node::Fn)
    }
 
    fn fn_args(&self, pos: usize) -> (usize, Vec<&'b str>) {
@@ -229,10 +265,10 @@ impl<'a, 'b> Parser<'a, 'b> {
 
       println!("[{}-{}] loop", pos, current - 1);
 
-      if let Some((pos, _ast)) = self.body(current, indent + 1)? {
+      if let Some((pos, _ast)) = self.block(current, indent + 1)? {
          current = pos;
       } else {
-         println!("[{}] expected loop body", current);
+         println!("[{}] expected loop block", current);
          return Err(current);
       }
 
@@ -259,10 +295,10 @@ impl<'a, 'b> Parser<'a, 'b> {
 
       println!("[{}] if {:?}", pos, ast);
 
-      if let Some((pos, _ast)) = self.body(current, indent + 1)? {
+      if let Some((pos, _ast)) = self.block(current, indent + 1)? {
          current = pos;
       } else {
-         println!("[{}] expected if body", current);
+         println!("[{}] expected if block", current);
          return Err(current);
       }
 
@@ -299,10 +335,10 @@ impl<'a, 'b> Parser<'a, 'b> {
 
       println!("[{}-{}] el", pos, current - 1);
 
-      if let Some((pos, _ast)) = self.body(current, indent + 1)? {
+      if let Some((pos, _ast)) = self.block(current, indent + 1)? {
          current = pos;
       } else {
-         println!("[{}] expected loop body", current);
+         println!("[{}] expected loop block", current);
          return Err(current);
       }
 
@@ -386,10 +422,10 @@ impl<'a, 'b> Parser<'a, 'b> {
       if let Some(pos) = self.line_ends(current) {
          current = pos;
 
-         if let Some((pos, _ast)) = self.body(current, indent + 1)? {
+         if let Some((pos, _ast)) = self.block(current, indent + 1)? {
             current = pos;
          } else {
-            println!("[{}] expected fn body", current);
+            println!("[{}] expected fn block", current);
             return Err(current);
          }
       } else {
@@ -442,74 +478,14 @@ impl<'a, 'b> Parser<'a, 'b> {
          return Err(current);
       };
 
-      if let Some((pos, _ast)) = self.body(current, indent + 1)? {
+      if let Some((pos, _ast)) = self.block(current, indent + 1)? {
          current = pos;
       } else {
-         println!("[{}] expected for body", current);
+         println!("[{}] expected for block", current);
          return Err(current);
       }
 
       ok(current, Node::For)
-   }
-
-   fn body(&self, pos: usize, indent: usize) -> Res {
-      let mut current = pos;
-      let mut last = current;
-      let mut consumed = false;
-
-      loop {
-         if let Some((pos, _ast)) = self.statement(current, indent)? {
-            current = pos;
-            consumed = true;
-            println!("[{}-{}] statement", last, current - 1);
-            last = current;
-         } else {
-            if consumed {
-               println!("[{}-{}] body ...", pos, current - 1);
-               return ok(current, Node::Body);
-            } else {
-               return Err(current);
-            }
-         }
-      }
-   }
-
-   fn statement(&self, pos: usize, indent: usize) -> Res {
-      let mut current = pos;
-
-      if let Some(pos) = self.indent_space(current, indent) {
-         current = pos;
-      } else {
-         return no();
-      }
-
-      let ast = if let Some((pos, ast)) = self.assign(current, indent)? {
-         current = pos;
-         ast
-      } else if let Some((pos, ast)) = self.for_(current, indent)? {
-         current = pos;
-         ast
-      } else if let Some((pos, ast)) = self.loop_(current, indent)? {
-         current = pos;
-         ast
-      } else if let Some((pos, ast)) = self.break_(current)? {
-         current = pos;
-         ast
-      } else if let Some((pos, ast)) = self.ret(current)? {
-         current = pos;
-         ast
-      } else if let Some((pos, ast)) = self.resulting(current, indent)? {
-         current = pos;
-         ast
-      } else if let Some((pos, ast)) = self.ret_list(current)? {
-         current = pos;
-         ast
-      } else {
-         println!("[{}] unrecognized", current);
-         return Err(current);
-      };
-
-      ok(current, ast)
    }
 
    fn ret(&self, pos: usize) -> Res {
@@ -1087,12 +1063,18 @@ impl<'a, 'b> Parser<'a, 'b> {
    }
 
    fn indent_space(&self, pos: usize, indent: usize) -> Option<usize> {
+      if indent == 0 {
+         return Some(pos);
+      }
+
       if let Some(token) = self.tokens.get(pos) {
-         if token.ty == TokenType::Space && token.span == indent * INDENT {
-            println!("[{}] indent {}", pos, indent);
-            return Some(pos + 1);
-         } else {
-            println!("[{}] indent {} != {} * {}", pos, token.span, indent, INDENT);
+         if token.ty == TokenType::Space {
+            if token.span == indent * INDENT {
+               println!("[{}] indent {}", pos, indent);
+               return Some(pos + 1);
+            } else {
+               println!("[{}] indent {} != {} * {}", pos, token.span, indent, INDENT);
+            }
          }
       }
 
