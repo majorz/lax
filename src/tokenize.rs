@@ -71,7 +71,7 @@ fn consume_start(input: &str, item: &'static str) -> Option<usize> {
    }
 }
 
-macro_rules! matcher {
+macro_rules! exact {
    ($string:expr, $func:ident, $token_type:expr) => {
       #[inline]
       fn $func(input: &str) -> MatchRes {
@@ -84,33 +84,33 @@ macro_rules! matcher {
    }
 }
 
-matcher!("\n", match_new_line, TokenType::NewLine);
-matcher!("**", match_power, TokenType::Power);
-matcher!("==", match_equal, TokenType::Equal);
-matcher!("!=", match_unequal, TokenType::Unequal);
-matcher!("<=", match_less_equal, TokenType::LessEqual);
-matcher!(">=", match_greater_equal, TokenType::GreaterEqual);
-matcher!("+=", match_add_assign, TokenType::AddAssign);
-matcher!("-=", match_subtract_assign, TokenType::SubtractAssign);
-matcher!("*=", match_multiply_assign, TokenType::MultiplyAssign);
-matcher!("/=", match_divide_assign, TokenType::DivideAssign);
-matcher!("..", match_range, TokenType::Range);
-matcher!(".", match_dot, TokenType::Dot);
-matcher!("=", match_assign, TokenType::Assign);
-matcher!("+", match_add, TokenType::Add);
-matcher!("-", match_subtract, TokenType::Subtract);
-matcher!("*", match_multiply, TokenType::Multiply);
-matcher!("/", match_divide, TokenType::Divide);
-matcher!("|", match_bar, TokenType::Bar);
-matcher!(":", match_colon, TokenType::Colon);
-matcher!("(", match_paren_left, TokenType::ParenLeft);
-matcher!(")", match_paren_right, TokenType::ParenRight);
-matcher!("[", match_bracket_left, TokenType::BracketLeft);
-matcher!("]", match_bracket_right, TokenType::BracketRight);
-matcher!("<", match_angle_left, TokenType::AngleLeft);
-matcher!(">", match_angle_right, TokenType::AngleRight);
-matcher!("{", match_curly_left, TokenType::CurlyLeft);
-matcher!("}", match_curly_right, TokenType::CurlyRight);
+exact!("\n", match_new_line, TokenType::NewLine);
+exact!("**", match_power, TokenType::Power);
+exact!("==", match_equal, TokenType::Equal);
+exact!("!=", match_unequal, TokenType::Unequal);
+exact!("<=", match_less_equal, TokenType::LessEqual);
+exact!(">=", match_greater_equal, TokenType::GreaterEqual);
+exact!("+=", match_add_assign, TokenType::AddAssign);
+exact!("-=", match_subtract_assign, TokenType::SubtractAssign);
+exact!("*=", match_multiply_assign, TokenType::MultiplyAssign);
+exact!("/=", match_divide_assign, TokenType::DivideAssign);
+exact!("..", match_range, TokenType::Range);
+exact!(".", match_dot, TokenType::Dot);
+exact!("=", match_assign, TokenType::Assign);
+exact!("+", match_add, TokenType::Add);
+exact!("-", match_subtract, TokenType::Subtract);
+exact!("*", match_multiply, TokenType::Multiply);
+exact!("/", match_divide, TokenType::Divide);
+exact!("|", match_bar, TokenType::Bar);
+exact!(":", match_colon, TokenType::Colon);
+exact!("(", match_paren_left, TokenType::ParenLeft);
+exact!(")", match_paren_right, TokenType::ParenRight);
+exact!("[", match_bracket_left, TokenType::BracketLeft);
+exact!("]", match_bracket_right, TokenType::BracketRight);
+exact!("<", match_angle_left, TokenType::AngleLeft);
+exact!(">", match_angle_right, TokenType::AngleRight);
+exact!("{", match_curly_left, TokenType::CurlyLeft);
+exact!("}", match_curly_right, TokenType::CurlyRight);
 
 fn match_space(input: &str) -> MatchRes {
    for (i, c) in input.bytes().enumerate() {
