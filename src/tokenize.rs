@@ -113,19 +113,21 @@ exact!("{", match_curly_left, TokenType::CurlyLeft);
 exact!("}", match_curly_right, TokenType::CurlyRight);
 
 fn match_space(input: &str) -> MatchRes {
-   for (i, c) in input.bytes().enumerate() {
-      if c == b' ' {
-         continue;
-      }
+   let mut pos = 0;
 
-      if i == 0 {
-         return None;
+   for c in input.bytes() {
+      if c == b' ' {
+         pos += 1;
       } else {
-         return Some((TokenType::Space, i));
+         break;
       }
    }
 
-   None
+   if pos == 0 {
+      return None;
+   } else {
+      return Some((TokenType::Space, pos));
+   }
 }
 
 fn match_symbol(input: &str) -> MatchRes {
@@ -373,5 +375,16 @@ mod tests {
       assert_eq!(match_power("-**"), None);
       assert_eq!(match_power("**"), Some((TokenType::Power, 2)));
       assert_eq!(match_power("****"), Some((TokenType::Power, 2)));
+   }
+
+   #[test]
+   fn space() {
+      assert_eq!(match_space(""), None);
+      assert_eq!(match_space("-"), None);
+      assert_eq!(match_space("- "), None);
+      assert_eq!(match_space(" "), Some((TokenType::Space, 1)));
+      assert_eq!(match_space(" -"), Some((TokenType::Space, 1)));
+      assert_eq!(match_space("   "), Some((TokenType::Space, 3)));
+      assert_eq!(match_space("   -"), Some((TokenType::Space, 3)));
    }
 }
