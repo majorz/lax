@@ -63,6 +63,8 @@ type MatchFn = fn(input: &str) -> MatchRes;
 
 #[inline]
 fn consume_start(input: &str, item: &'static str) -> Option<usize> {
+   assert!(!input.is_empty());
+
    let item_len = item.len();
    if input.len() >= item_len && &input[..item_len] == item {
       Some(item_len)
@@ -131,6 +133,12 @@ fn match_space(input: &str) -> MatchRes {
 }
 
 fn match_symbol(input: &str) -> MatchRes {
+   assert!(!input.is_empty());
+
+   if input.len() == 1 {
+      return None;
+   }
+
    if input.as_bytes()[0] != b'^' {
       return None;
    }
@@ -159,6 +167,8 @@ const KEYWORD_MAP: [(&'static str, TokenType); 13] = [
 ];
 
 fn match_ident(input: &str) -> MatchRes {
+   assert!(!input.is_empty());
+
    let c = input.as_bytes()[0];
    if !(
       (c >= b'a' && c <= b'z') ||
@@ -359,8 +369,7 @@ mod tests {
    use super::*;
 
    #[test]
-   fn consume_start_() {
-      assert_eq!(consume_start("", "break"), None);
+   fn consume_start_some() {
       assert_eq!(consume_start("brea", "break"), None);
       assert_eq!(consume_start("bbreak", "break"), None);
       assert_eq!(consume_start("break", "break"), Some(5));
@@ -369,12 +378,23 @@ mod tests {
    }
 
    #[test]
+   #[should_panic]
+   fn consume_start_empty() {
+      consume_start("", "break");
+   }
+
+   #[test]
    fn exact() {
-      assert_eq!(match_power(""), None);
       assert_eq!(match_power("*"), None);
       assert_eq!(match_power("-**"), None);
       assert_eq!(match_power("**"), Some((TokenType::Power, 2)));
       assert_eq!(match_power("****"), Some((TokenType::Power, 2)));
+   }
+
+   #[test]
+   #[should_panic]
+   fn exact_empty() {
+      match_power("");
    }
 
    #[test]
