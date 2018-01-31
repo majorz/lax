@@ -36,7 +36,7 @@ pub enum TokenType {
    String,
    Ident,
    Symbol,
-   Number,
+   Digits,
    Fn,
    Loop,
    Match,
@@ -187,7 +187,7 @@ fn match_ident(input: &str) -> MatchRes {
    Some((TokenType::Ident, pos))
 }
 
-fn match_number(input: &str) -> MatchRes {
+fn match_digits(input: &str) -> MatchRes {
    let mut pos = 0;
 
    for c in input.as_bytes() {
@@ -198,22 +198,8 @@ fn match_number(input: &str) -> MatchRes {
       }
    }
 
-   if pos != input.len() {
-      if input.as_bytes()[pos] == b'.' {
-         pos += 1;
-
-         for c in input[pos..].as_bytes() {
-            if *c >= b'0' && *c <= b'9' {
-               pos += 1;
-            } else {
-               break;
-            }
-         }
-      }
-   }
-
    if pos != 0 {
-      Some((TokenType::Number, pos))
+      Some((TokenType::Digits, pos))
    } else {
       None
    }
@@ -315,7 +301,7 @@ const MATCH_FNS: [MatchFn; 33] = [
    match_curly_left,
    match_curly_right,
    match_ident,
-   match_number,
+   match_digits,
    match_dot,
    match_symbol,
    match_accent,

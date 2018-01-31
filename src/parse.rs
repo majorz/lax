@@ -6,6 +6,7 @@ const INDENT: usize = 3;
 enum Node {
    Fn,
    FnCall,
+   FnArgs,
    Block,
    Ret,
    RetList,
@@ -42,6 +43,7 @@ enum Node {
    String,
    Break,
    Parens,
+   Pattern,
 }
 
 type Res = Result<Option<(usize, Node)>, usize>;
@@ -183,9 +185,8 @@ impl<'a, 'b> Parser<'a, 'b> {
 
       current = self.skip_space(current);
 
-      let name = if let Some((pos, ident)) = self.ident(current) {
+      if let Some((pos, _ast)) = self.ident(current)? {
          current = pos;
-         ident
       } else {
          println!("[{}] expected function name", current);
          return Err(current);
@@ -200,8 +201,9 @@ impl<'a, 'b> Parser<'a, 'b> {
          return Err(current);
       }
 
-      let (pos, _args) = self.fn_args(current);
-      current = pos;
+      if let Some((pos, _args)) = self.fn_args(current)? {
+         current = pos;
+      }
 
       if let Some(pos) = self.token_type(current, TokenType::ParenRight) {
          current = pos;
@@ -217,7 +219,7 @@ impl<'a, 'b> Parser<'a, 'b> {
          return Err(current);
       }
 
-      println!("[{}] fn {}()", pos, name);
+      println!("[{}] fn ()", pos);
 
       if let Some((pos, _ast)) = self.block(current, indent + 1)? {
          current = pos;
@@ -229,20 +231,18 @@ impl<'a, 'b> Parser<'a, 'b> {
       ok(current, Node::Fn)
    }
 
-   fn fn_args(&self, pos: usize) -> (usize, Vec<&'b str>) {
+   fn fn_args(&self, pos: usize) -> Res {
       let mut current = pos;
-      let mut args = Vec::new();
 
       current = self.skip_white_space(current);
 
       loop {
-         if let Some((pos, ident)) = self.ident(current) {
+         if let Some((pos, _ast)) = self.ident(current)? {
             current = pos;
-            args.push(ident);
 
             current = self.skip_white_space(current)
          } else {
-            return (current, args);
+            return ok(current, Node::FnArgs);
          }
       }
    }
@@ -401,7 +401,7 @@ impl<'a, 'b> Parser<'a, 'b> {
          return no();
       }
 
-      if let Some(pos) = self.pattern(current) {
+      if let Some((pos, _ast)) = self.pattern(current)? {
          current = pos;
       } else {
          println!("[{}] expected pattern", current);
@@ -453,7 +453,7 @@ impl<'a, 'b> Parser<'a, 'b> {
 
       current = self.skip_space(current);
 
-      if let Some(pos) = self.pattern(current) {
+      if let Some((pos, _ast)) = self.pattern(current)? {
          current = pos;
       } else {
          println!("[{}] expected pattern", current);
@@ -561,9 +561,8 @@ impl<'a, 'b> Parser<'a, 'b> {
    fn assign(&self, pos: usize, indent: usize) -> Res {
       let mut current = pos;
 
-      let variable = if let Some((pos, ident)) = self.ident(current) {
+      if let Some((pos, _ast)) = self.ident(current)? {
          current = pos;
-         ident
       } else {
          return no();
       };
@@ -599,7 +598,7 @@ impl<'a, 'b> Parser<'a, 'b> {
          return no();
       };
 
-      println!("[{}-{}] {:?} {}", pos, current - 1, ast, variable);
+      println!("[{}-{}] {:?}", pos, current - 1, ast);
 
       ok(current, ast)
    }
@@ -775,9 +774,9 @@ impl<'a, 'b> Parser<'a, 'b> {
       } else if let Some((pos, ast)) = self.unary(current)? {
          current = pos;
          ast
-      } else if let Some((pos, _ident)) = self.ident(current) {
+      } else if let Some((pos, ast)) = self.ident(current)? {
          current = pos;
-         Node::Ident
+         ast
       } else if let Some((pos, ast)) = self.value(current)? {
          current = pos;
          ast
@@ -820,9 +819,8 @@ impl<'a, 'b> Parser<'a, 'b> {
    fn fn_call(&self, pos: usize) -> Res {
       let mut current = pos;
 
-      let name = if let Some((pos, ident)) = self.ident(current) {
+      if let Some((pos, _ast)) = self.ident(current)? {
          current = pos;
-         ident
       } else {
          return no();
       };
@@ -849,7 +847,7 @@ impl<'a, 'b> Parser<'a, 'b> {
          return Err(current);
       }
 
-      println!("[{}-{}] {}(...)", pos, current - 1, name);
+      println!("[{}-{}] fn(...)", pos, current - 1);
 
       ok(current, Node::FnCall)
    }
@@ -1037,26 +1035,26 @@ impl<'a, 'b> Parser<'a, 'b> {
       ok(current, Node::MapItem)
    }
 
-   fn pattern(&self, pos: usize) -> Option<usize> {
+   fn pattern(&self, pos: usize) -> Res {
       let mut current = pos;
       let mut consumed = false;
 
       current = self.skip_white_space(current);
 
       loop {
-         if let Some((pos, _ident)) = self.ident(current) {
+         if let Some((pos, _ast)) = self.ident(current)? {
             current = pos;
             consumed = true;
             current = self.skip_white_space(current)
-         } else if let Ok(Some((pos, _ident))) = self.value(current) {
+         } else if let Some((pos, _ast)) = self.value(current)? {
             current = pos;
             consumed = true;
             current = self.skip_white_space(current)
          } else {
             if consumed {
-               return Some(current);
+               return ok(current, Node::Pattern);
             } else {
-               return None;
+               return no();
             }
          }
       }
@@ -1081,14 +1079,42 @@ impl<'a, 'b> Parser<'a, 'b> {
       None
    }
 
-   fn ident(&self, pos: usize) -> Option<(usize, &'b str)> {
-      self.token_string(pos, TokenType::Ident)
+   fn ident(&self, pos: usize) -> Res {
+      if let Some(pos) = self.token_type(pos, TokenType::Ident) {
+         ok(pos, Node::Ident)
+      } else {
+         no()
+      }
    }
 
    fn number(&self, pos: usize) -> Res {
-      if let Some((next, ident)) = self.token_string(pos, TokenType::Number) {
-         println!("[{}] {}", pos, ident);
-         ok(next, Node::Number)
+      let mut current = pos;
+      let mut is_number = false;
+
+      if let Some(pos) = self.token_type(current, TokenType::Add) {
+         current += pos;
+      } else if let Some(pos) = self.token_type(current, TokenType::Subtract) {
+         current += pos;
+      }
+
+      if let Some(pos) = self.token_type(current, TokenType::Digits) {
+         current += pos;
+         is_number = true;
+      }
+
+      if let Some(pos) = self.token_type(current, TokenType::Dot) {
+         current += pos;
+      } else if !is_number {
+         return no();
+      }
+
+      if let Some(pos) = self.token_type(current, TokenType::Digits) {
+         current += pos;
+         is_number = true;
+      }
+
+      if is_number {
+         ok(current, Node::Number)
       } else {
          no()
       }
@@ -1182,18 +1208,6 @@ impl<'a, 'b> Parser<'a, 'b> {
       }
 
       no()
-   }
-
-   fn token_string(&self, pos: usize, ty: TokenType) -> Option<(usize, &'b str)> {
-      if let Some(token) = self.tokens.get(pos) {
-         if token.ty == ty {
-            let ident = &self.input[token.pos..token.pos + token.span];
-            println!("[{}] {}", pos, ident);
-            return Some((pos + 1, ident));
-         }
-      }
-
-      None
    }
 
    fn token_type(&self, pos: usize, ty: TokenType) -> Option<usize> {
