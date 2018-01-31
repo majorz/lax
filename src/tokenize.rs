@@ -63,7 +63,7 @@ type MatchFn = fn(input: &str) -> MatchRes;
 
 #[inline]
 fn consume_start(input: &str, item: &'static str) -> Option<usize> {
-   assert!(!input.is_empty());
+   debug_assert!(!input.is_empty());
 
    let item_len = item.len();
    if input.len() >= item_len && &input[..item_len] == item {
@@ -133,7 +133,7 @@ fn match_space(input: &str) -> MatchRes {
 }
 
 fn match_symbol(input: &str) -> MatchRes {
-   assert!(!input.is_empty());
+   debug_assert!(!input.is_empty());
 
    if input.len() == 1 {
       return None;
@@ -167,7 +167,7 @@ const KEYWORD_MAP: [(&'static str, TokenType); 13] = [
 ];
 
 fn match_ident(input: &str) -> MatchRes {
-   assert!(!input.is_empty());
+   debug_assert!(!input.is_empty());
 
    let c = input.as_bytes()[0];
    if !(
@@ -379,6 +379,7 @@ mod tests {
 
    #[test]
    #[should_panic]
+   #[cfg(debug_assertions)]
    fn consume_start_empty() {
       consume_start("", "break");
    }
@@ -393,6 +394,7 @@ mod tests {
 
    #[test]
    #[should_panic]
+   #[cfg(debug_assertions)]
    fn exact_empty() {
       match_power("");
    }
