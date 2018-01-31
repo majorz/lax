@@ -351,3 +351,27 @@ fn match_token(input: &str) -> MatchRes {
 
    None
 }
+
+#[cfg(test)]
+mod tests {
+   use super::*;
+
+   #[test]
+   fn consume_start_() {
+      assert_eq!(consume_start("", "break"), None);
+      assert_eq!(consume_start("brea", "break"), None);
+      assert_eq!(consume_start("bbreak", "break"), None);
+      assert_eq!(consume_start("break", "break"), Some(5));
+      assert_eq!(consume_start("breakb", "break"), Some(5));
+      assert_eq!(consume_start("breakЯ", "break"), Some(5));
+   }
+
+   #[test]
+   fn exact() {
+      assert_eq!(match_power(""), None);
+      assert_eq!(match_power("*"), None);
+      assert_eq!(match_power("-**"), None);
+      assert_eq!(match_power("**"), Some((TokenType::Power, 2)));
+      assert_eq!(match_power("****"), Some((TokenType::Power, 2)));
+   }
+}
