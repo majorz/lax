@@ -1,3 +1,4 @@
+
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub enum TokenType {
    Space,
@@ -60,6 +61,22 @@ pub struct Token {
 
 type MatchRes = Option<(TokenType, usize)>;
 type MatchFn = fn(input: &str) -> MatchRes;
+
+const KEYWORD_MAP: [(&'static str, TokenType); 13] = [
+   ("fn",     TokenType::Fn),
+   ("loop",   TokenType::Loop),
+   ("match",  TokenType::Match),
+   ("if",     TokenType::If),
+   ("ef",     TokenType::Ef),
+   ("el",     TokenType::El),
+   ("break",  TokenType::Break),
+   ("ret",    TokenType::Ret),
+   ("for",    TokenType::For),
+   ("in",     TokenType::In),
+   ("and",    TokenType::And),
+   ("or",     TokenType::Or),
+   ("not",    TokenType::Not),
+];
 
 #[inline]
 fn consume_start(input: &str, item: &'static str) -> Option<usize> {
@@ -143,28 +160,12 @@ fn match_symbol(input: &str) -> MatchRes {
       return None;
    }
 
-   if let Some((_, pos)) = match_ident(&input[1..]) {
+   if let Some((TokenType::Ident, pos)) = match_ident(&input[1..]) {
       Some((TokenType::Symbol, pos + 1))
    } else {
       None
    }
 }
-
-const KEYWORD_MAP: [(&'static str, TokenType); 13] = [
-   ("fn",     TokenType::Fn),
-   ("loop",   TokenType::Loop),
-   ("match",  TokenType::Match),
-   ("if",     TokenType::If),
-   ("ef",     TokenType::Ef),
-   ("el",     TokenType::El),
-   ("break",  TokenType::Break),
-   ("ret",    TokenType::Ret),
-   ("for",    TokenType::For),
-   ("in",     TokenType::In),
-   ("and",    TokenType::And),
-   ("or",     TokenType::Or),
-   ("not",    TokenType::Not),
-];
 
 fn match_ident(input: &str) -> MatchRes {
    debug_assert!(!input.is_empty());
@@ -421,6 +422,35 @@ mod tests {
    }
 
    #[test]
+   fn symbol() {
+      m!(match_symbol, "-");
+      m!(match_symbol, "-^name");
+      m!(match_symbol, "^012abc");
+      m!(match_symbol, "^");
+      m!(match_symbol, "^-");
+      m!(match_symbol, "^Я");
+      m!(match_symbol, "^for");
+      m!(match_symbol, "^_", TokenType::Symbol, 2);
+      m!(match_symbol, "^__", TokenType::Symbol, 3);
+      m!(match_symbol, "^_.", TokenType::Symbol, 2);
+      m!(match_symbol, "^_name", TokenType::Symbol, 6);
+      m!(match_symbol, "^name", TokenType::Symbol, 5);
+      m!(match_symbol, "^_NAME.", TokenType::Symbol, 6);
+      m!(match_symbol, "^NAME.", TokenType::Symbol, 5);
+      m!(match_symbol, "^a100", TokenType::Symbol, 5);
+      m!(match_symbol, "^a100.", TokenType::Symbol, 5);
+      m!(match_symbol, "^a_a_a.", TokenType::Symbol, 6);
+      m!(match_symbol, "^aЯ", TokenType::Symbol, 2);
+   }
+
+   #[test]
+   #[should_panic]
+   #[cfg(debug_assertions)]
+   fn symbol_empty() {
+      match_symbol("");
+   }
+
+   #[test]
    fn ident() {
       m!(match_ident, "-");
       m!(match_ident, "-name");
@@ -468,6 +498,7 @@ mod tests {
    #[test]
    fn digits() {
       m!(match_digits, "");
+      m!(match_digits, " 1");
       m!(match_digits, "0", TokenType::Digits, 1);
       m!(match_digits, "1", TokenType::Digits, 1);
       m!(match_digits, "0000000000.", TokenType::Digits, 10);
