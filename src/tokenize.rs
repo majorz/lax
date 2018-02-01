@@ -368,6 +368,16 @@ fn match_token(input: &str) -> MatchRes {
 mod tests {
    use super::*;
 
+   macro_rules! m {
+      ($matcher:ident, $input:expr) => (
+         assert_eq!($matcher($input), None);
+      );
+
+      ($matcher:ident, $input:expr, $ty:expr, $span:expr) => (
+         assert_eq!($matcher($input), Some(($ty, $span)));
+      );
+   }
+
    #[test]
    fn consume_start_some() {
       assert_eq!(consume_start("brea", "break"), None);
@@ -386,10 +396,10 @@ mod tests {
 
    #[test]
    fn exact() {
-      assert_eq!(match_power("*"), None);
-      assert_eq!(match_power("-**"), None);
-      assert_eq!(match_power("**"), Some((TokenType::Power, 2)));
-      assert_eq!(match_power("****"), Some((TokenType::Power, 2)));
+      m!(match_power, "*");
+      m!(match_power, "-**");
+      m!(match_power, "**", TokenType::Power, 2);
+      m!(match_power, "****", TokenType::Power, 2);
    }
 
    #[test]
@@ -401,12 +411,38 @@ mod tests {
 
    #[test]
    fn space() {
-      assert_eq!(match_space(""), None);
-      assert_eq!(match_space("-"), None);
-      assert_eq!(match_space("- "), None);
-      assert_eq!(match_space(" "), Some((TokenType::Space, 1)));
-      assert_eq!(match_space(" -"), Some((TokenType::Space, 1)));
-      assert_eq!(match_space("   "), Some((TokenType::Space, 3)));
-      assert_eq!(match_space("   -"), Some((TokenType::Space, 3)));
+      m!(match_space, "");
+      m!(match_space, "-");
+      m!(match_space, "- ");
+      m!(match_space, " ", TokenType::Space, 1);
+      m!(match_space, " -", TokenType::Space, 1);
+      m!(match_space, "   ", TokenType::Space, 3);
+      m!(match_space, "   -", TokenType::Space, 3);
    }
+
+   #[test]
+   fn ident() {
+      m!(match_ident, "-");
+      m!(match_ident, "-name");
+      m!(match_ident, "012abc");
+      m!(match_ident, "_", TokenType::Ident, 1);
+      m!(match_ident, "__", TokenType::Ident, 2);
+      m!(match_ident, "_.", TokenType::Ident, 1);
+      m!(match_ident, "_name", TokenType::Ident, 5);
+      m!(match_ident, "name", TokenType::Ident, 4);
+      m!(match_ident, "_NAME.", TokenType::Ident, 5);
+      m!(match_ident, "NAME.", TokenType::Ident, 4);
+      m!(match_ident, "a100", TokenType::Ident, 4);
+      m!(match_ident, "a100.", TokenType::Ident, 4);
+      m!(match_ident, "a_a_a.", TokenType::Ident, 5);
+      m!(match_ident, "aЯ", TokenType::Ident, 1);
+   }
+
+   #[test]
+   #[should_panic]
+   #[cfg(debug_assertions)]
+   fn ident_empty() {
+      match_ident("");
+   }
+
 }
