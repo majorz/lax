@@ -445,4 +445,23 @@ mod tests {
       match_ident("");
    }
 
+   #[test]
+   fn keyword() {
+      m!(match_ident, "fn", TokenType::Fn, 2);
+      m!(match_ident, "loop", TokenType::Loop, 4);
+      m!(match_ident, "match", TokenType::Match, 5);
+      m!(match_ident, "if", TokenType::If, 2);
+      m!(match_ident, "ef", TokenType::Ef, 2);
+      m!(match_ident, "el", TokenType::El, 2);
+      m!(match_ident, "break", TokenType::Break, 5);
+      m!(match_ident, "ret", TokenType::Ret, 3);
+      m!(match_ident, "for", TokenType::For, 3);
+      m!(match_ident, "in", TokenType::In, 2);
+      m!(match_ident, "and", TokenType::And, 3);
+      m!(match_ident, "or", TokenType::Or, 2);
+      m!(match_ident, "not", TokenType::Not, 3);
+      m!(match_ident, "for", TokenType::For, 3);
+      m!(match_ident, "break_", TokenType::Ident, 6);
+      m!(match_ident, "ret100", TokenType::Ident, 6);
+   }
 }
