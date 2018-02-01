@@ -464,4 +464,14 @@ mod tests {
       m!(match_ident, "break_", TokenType::Ident, 6);
       m!(match_ident, "ret100", TokenType::Ident, 6);
    }
+
+   #[test]
+   fn digits() {
+      m!(match_digits, "");
+      m!(match_digits, "0", TokenType::Digits, 1);
+      m!(match_digits, "1", TokenType::Digits, 1);
+      m!(match_digits, "0000000000.", TokenType::Digits, 10);
+      m!(match_digits, "0123456789.", TokenType::Digits, 10);
+      m!(match_digits, "9876543210.", TokenType::Digits, 10);
+   }
 }
