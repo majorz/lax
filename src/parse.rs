@@ -1,4 +1,4 @@
-use tokenize::{TokenType, Token};
+use tokenize::{Syn, Token};
 
 const INDENT: usize = 3;
 
@@ -177,7 +177,7 @@ impl<'a, 'b> Parser<'a, 'b> {
    fn fn_(&self, pos: usize, indent: usize) -> Res {
       let mut current = pos;
 
-      if let Some(pos) = self.token_type(current, TokenType::Fn) {
+      if let Some(pos) = self.token_type(current, Syn::Fn) {
          current = pos;
       } else {
          return no();
@@ -194,7 +194,7 @@ impl<'a, 'b> Parser<'a, 'b> {
 
       current = self.skip_space(current);
 
-      if let Some(pos) = self.token_type(current, TokenType::ParenLeft) {
+      if let Some(pos) = self.token_type(current, Syn::ParenLeft) {
          current = pos;
       } else {
          println!("[{}] expected (", current);
@@ -205,7 +205,7 @@ impl<'a, 'b> Parser<'a, 'b> {
          current = pos;
       }
 
-      if let Some(pos) = self.token_type(current, TokenType::ParenRight) {
+      if let Some(pos) = self.token_type(current, Syn::ParenRight) {
          current = pos;
       } else {
          println!("[{}] expected )", current);
@@ -250,7 +250,7 @@ impl<'a, 'b> Parser<'a, 'b> {
    fn loop_(&self, pos: usize, indent: usize) -> Res {
       let mut current = pos;
 
-      if let Some(pos) = self.token_type(current, TokenType::Loop) {
+      if let Some(pos) = self.token_type(current, Syn::Loop) {
          current = pos;
       } else {
          return no();
@@ -278,7 +278,7 @@ impl<'a, 'b> Parser<'a, 'b> {
    fn if_(&self, pos: usize, indent: usize) -> Res {
       let mut current = pos;
 
-      if let Some(pos) = self.token_type(current, TokenType::If) {
+      if let Some(pos) = self.token_type(current, Syn::If) {
          current = pos;
       } else {
          return no();
@@ -320,7 +320,7 @@ impl<'a, 'b> Parser<'a, 'b> {
          return no();
       }
 
-      if let Some(pos) = self.token_type(current, TokenType::El) {
+      if let Some(pos) = self.token_type(current, Syn::El) {
          current = pos;
       } else {
          return no();
@@ -348,7 +348,7 @@ impl<'a, 'b> Parser<'a, 'b> {
    fn match_(&self, pos: usize, indent: usize) -> Res {
       let mut current = pos;
 
-      if let Some(pos) = self.token_type(current, TokenType::Match) {
+      if let Some(pos) = self.token_type(current, Syn::Match) {
          current = pos;
       } else {
          return no();
@@ -410,7 +410,7 @@ impl<'a, 'b> Parser<'a, 'b> {
 
       current = self.skip_space(current);
 
-      if let Some(pos) = self.token_type(current, TokenType::Colon) {
+      if let Some(pos) = self.token_type(current, Syn::Colon) {
          current = pos;
       } else {
          println!("[{}] expected :", current);
@@ -445,7 +445,7 @@ impl<'a, 'b> Parser<'a, 'b> {
    fn for_(&self, pos: usize, indent: usize) -> Res {
       let mut current = pos;
 
-      if let Some(pos) = self.token_type(current, TokenType::For) {
+      if let Some(pos) = self.token_type(current, Syn::For) {
          current = pos;
       } else {
          return no();
@@ -462,7 +462,7 @@ impl<'a, 'b> Parser<'a, 'b> {
 
       current = self.skip_space(current);
 
-      if let Some(pos) = self.token_type(current, TokenType::In) {
+      if let Some(pos) = self.token_type(current, Syn::In) {
          current = pos;
       } else {
          println!("[{}] expected in", current);
@@ -491,7 +491,7 @@ impl<'a, 'b> Parser<'a, 'b> {
    fn ret(&self, pos: usize) -> Res {
       let mut current = pos;
 
-      if let Some(pos) = self.token_type(current, TokenType::Ret) {
+      if let Some(pos) = self.token_type(current, Syn::Ret) {
          current = pos;
       } else {
          return no();
@@ -570,27 +570,27 @@ impl<'a, 'b> Parser<'a, 'b> {
       current = self.skip_space(current);
 
       let ast = if let Some((pos, ast)) = self.assign_type(
-         current, indent, TokenType::Assign, Node::Assign
+         current, indent, Syn::Assign, Node::Assign
       )? {
          current = pos;
          ast
       } else if let Some((pos, ast)) = self.assign_type(
-         current, indent, TokenType::AddAssign, Node::AddAssign
+         current, indent, Syn::AddAssign, Node::AddAssign
       )? {
          current = pos;
          ast
       } else if let Some((pos, ast)) = self.assign_type(
-         current, indent, TokenType::SubtractAssign, Node::SubtractAssign
+         current, indent, Syn::SubtractAssign, Node::SubtractAssign
       )? {
          current = pos;
          ast
       } else if let Some((pos, ast)) = self.assign_type(
-         current, indent, TokenType::MultiplyAssign, Node::MultiplyAssign
+         current, indent, Syn::MultiplyAssign, Node::MultiplyAssign
       )? {
          current = pos;
          ast
       } else if let Some((pos, ast)) = self.assign_type(
-         current, indent, TokenType::DivideAssign, Node::DivideAssign
+         current, indent, Syn::DivideAssign, Node::DivideAssign
       )? {
          current = pos;
          ast
@@ -603,7 +603,7 @@ impl<'a, 'b> Parser<'a, 'b> {
       ok(current, ast)
    }
 
-   fn assign_type(&self, pos: usize, indent: usize, ty: TokenType, node: Node) -> Res {
+   fn assign_type(&self, pos: usize, indent: usize, ty: Syn, node: Node) -> Res {
       let mut current = pos;
 
       if let Some(pos) = self.token_type(current, ty) {
@@ -628,57 +628,57 @@ impl<'a, 'b> Parser<'a, 'b> {
       let mut current = pos;
 
       let ast = if let Some((pos, ast)) = self.binary_type(
-         current, TokenType::Equal, Node::Equal
+         current, Syn::Equal, Node::Equal
       )? {
          current = pos;
          ast
       } else if let Some((pos, ast)) = self.binary_type(
-         current, TokenType::Unequal, Node::Unequal
+         current, Syn::Unequal, Node::Unequal
       )? {
          current = pos;
          ast
       } else if let Some((pos, ast)) = self.binary_type(
-         current, TokenType::LessEqual, Node::LessEqual
+         current, Syn::LessEqual, Node::LessEqual
       )? {
          current = pos;
          ast
       } else if let Some((pos, ast)) = self.binary_type(
-         current, TokenType::GreaterEqual, Node::GreaterEqual
+         current, Syn::GreaterEqual, Node::GreaterEqual
       )? {
          current = pos;
          ast
       } else if let Some((pos, ast)) = self.binary_type(
-         current, TokenType::Add, Node::Add
+         current, Syn::Add, Node::Add
       )? {
          current = pos;
          ast
       } else if let Some((pos, ast)) = self.binary_type(
-         current, TokenType::Subtract, Node::Subtract
+         current, Syn::Subtract, Node::Subtract
       )? {
          current = pos;
          ast
       } else if let Some((pos, ast)) = self.binary_type(
-         current, TokenType::Multiply, Node::Multiply
+         current, Syn::Multiply, Node::Multiply
       )? {
          current = pos;
          ast
       } else if let Some((pos, ast)) = self.binary_type(
-         current, TokenType::Divide, Node::Divide
+         current, Syn::Divide, Node::Divide
       )? {
          current = pos;
          ast
       } else if let Some((pos, ast)) = self.binary_type(
-         current, TokenType::Or, Node::Or
+         current, Syn::Or, Node::Or
       )? {
          current = pos;
          ast
       } else if let Some((pos, ast)) = self.binary_type(
-         current, TokenType::And, Node::And
+         current, Syn::And, Node::And
       )? {
          current = pos;
          ast
       } else if let Some((pos, ast)) = self.binary_type(
-         current, TokenType::Range, Node::Range
+         current, Syn::Range, Node::Range
       )? {
          current = pos;
          ast
@@ -702,7 +702,7 @@ impl<'a, 'b> Parser<'a, 'b> {
       let mut current = pos;
 
       let ast = if let Some((pos, ast)) = self.binary_type(
-         current, TokenType::Not, Node::Not
+         current, Syn::Not, Node::Not
       )? {
          current = pos;
          ast
@@ -722,7 +722,7 @@ impl<'a, 'b> Parser<'a, 'b> {
       ok(current, ast)
    }
 
-   fn binary_type(&self, pos: usize, ty: TokenType, node: Node) -> Res {
+   fn binary_type(&self, pos: usize, ty: Syn, node: Node) -> Res {
       let mut current = pos;
 
       if let Some(pos) = self.token_type(current, ty) {
@@ -827,7 +827,7 @@ impl<'a, 'b> Parser<'a, 'b> {
 
       current = self.skip_space(current);
 
-      if let Some(pos) = self.token_type(current, TokenType::ParenLeft) {
+      if let Some(pos) = self.token_type(current, Syn::ParenLeft) {
          current = pos;
       } else {
          return no();
@@ -840,7 +840,7 @@ impl<'a, 'b> Parser<'a, 'b> {
          return Err(current);
       };
 
-      if let Some(pos) = self.token_type(current, TokenType::ParenRight) {
+      if let Some(pos) = self.token_type(current, Syn::ParenRight) {
          current = pos;
       } else {
          println!("[{}] expected )", current);
@@ -855,7 +855,7 @@ impl<'a, 'b> Parser<'a, 'b> {
    fn break_(&self, pos: usize) -> Res {
       let mut current = pos;
 
-      if let Some(pos) = self.token_type(current, TokenType::Break) {
+      if let Some(pos) = self.token_type(current, Syn::Break) {
          current = pos;
       } else {
          return no();
@@ -874,7 +874,7 @@ impl<'a, 'b> Parser<'a, 'b> {
    fn parens(&self, pos: usize) -> Res {
       let mut current = pos;
 
-      if let Some(pos) = self.token_type(current, TokenType::ParenLeft) {
+      if let Some(pos) = self.token_type(current, Syn::ParenLeft) {
          current = pos;
       } else {
          return no();
@@ -887,7 +887,7 @@ impl<'a, 'b> Parser<'a, 'b> {
          return Err(current);
       };
 
-      if let Some(pos) = self.token_type(current, TokenType::ParenRight) {
+      if let Some(pos) = self.token_type(current, Syn::ParenRight) {
          current = pos;
       } else {
          println!("[{}] expected )", current);
@@ -902,7 +902,7 @@ impl<'a, 'b> Parser<'a, 'b> {
    fn list(&self, pos: usize) -> Res {
       let mut current = pos;
 
-      if let Some(pos) = self.token_type(current, TokenType::BracketLeft) {
+      if let Some(pos) = self.token_type(current, Syn::BracketLeft) {
          current = pos;
       } else {
          return no();
@@ -915,7 +915,7 @@ impl<'a, 'b> Parser<'a, 'b> {
          return Err(current);
       };
 
-      if let Some(pos) = self.token_type(current, TokenType::BracketRight) {
+      if let Some(pos) = self.token_type(current, Syn::BracketRight) {
          current = pos;
       } else {
          println!("[{}] expected ]", current);
@@ -962,7 +962,7 @@ impl<'a, 'b> Parser<'a, 'b> {
    fn map(&self, pos: usize) -> Res {
       let mut current = pos;
 
-      if let Some(pos) = self.token_type(current, TokenType::CurlyLeft) {
+      if let Some(pos) = self.token_type(current, Syn::CurlyLeft) {
          current = pos;
       } else {
          return no();
@@ -975,7 +975,7 @@ impl<'a, 'b> Parser<'a, 'b> {
          return Err(current);
       };
 
-      if let Some(pos) = self.token_type(current, TokenType::CurlyRight) {
+      if let Some(pos) = self.token_type(current, Syn::CurlyRight) {
          current = pos;
       } else {
          println!("[{}] expected }}", current);
@@ -1013,7 +1013,7 @@ impl<'a, 'b> Parser<'a, 'b> {
 
       current = self.skip_space(current);
 
-      if let Some(pos) = self.token_type(current, TokenType::Colon) {
+      if let Some(pos) = self.token_type(current, Syn::Colon) {
          current = pos;
       } else {
          println!("[{}] expected :", current);
@@ -1066,7 +1066,7 @@ impl<'a, 'b> Parser<'a, 'b> {
       }
 
       if let Some(token) = self.tokens.get(pos) {
-         if token.ty == TokenType::Space {
+         if token.ty == Syn::Space {
             if token.span == indent * INDENT {
                println!("[{}] indent {}", pos, indent);
                return Some(pos + 1);
@@ -1080,7 +1080,7 @@ impl<'a, 'b> Parser<'a, 'b> {
    }
 
    fn ident(&self, pos: usize) -> Res {
-      if let Some(pos) = self.token_type(pos, TokenType::Ident) {
+      if let Some(pos) = self.token_type(pos, Syn::Ident) {
          ok(pos, Node::Ident)
       } else {
          no()
@@ -1091,24 +1091,24 @@ impl<'a, 'b> Parser<'a, 'b> {
       let mut current = pos;
       let mut is_number = false;
 
-      if let Some(pos) = self.token_type(current, TokenType::Add) {
+      if let Some(pos) = self.token_type(current, Syn::Add) {
          current += pos;
-      } else if let Some(pos) = self.token_type(current, TokenType::Subtract) {
+      } else if let Some(pos) = self.token_type(current, Syn::Subtract) {
          current += pos;
       }
 
-      if let Some(pos) = self.token_type(current, TokenType::Digits) {
+      if let Some(pos) = self.token_type(current, Syn::Digits) {
          current += pos;
          is_number = true;
       }
 
-      if let Some(pos) = self.token_type(current, TokenType::Dot) {
+      if let Some(pos) = self.token_type(current, Syn::Dot) {
          current += pos;
       } else if !is_number {
          return no();
       }
 
-      if let Some(pos) = self.token_type(current, TokenType::Digits) {
+      if let Some(pos) = self.token_type(current, Syn::Digits) {
          current += pos;
          is_number = true;
       }
@@ -1149,7 +1149,7 @@ impl<'a, 'b> Parser<'a, 'b> {
    fn line_end(&self, pos: usize) -> Option<usize> {
       let mut current = pos;
 
-      if let Some(pos) = self.token_type(current, TokenType::Space) {
+      if let Some(pos) = self.token_type(current, Syn::Space) {
          current = pos;
       }
 
@@ -1162,7 +1162,7 @@ impl<'a, 'b> Parser<'a, 'b> {
 
    fn eol_eof(&self, pos: usize) -> Option<usize> {
       if let Some(token) = self.tokens.get(pos) {
-         if token.ty == TokenType::NewLine {
+         if token.ty == Syn::NewLine {
             println!("[{}] eol", pos);
             Some(pos + 1)
          } else {
@@ -1176,7 +1176,7 @@ impl<'a, 'b> Parser<'a, 'b> {
 
    fn accent(&self, pos: usize) -> Res {
       if let Some(token) = self.tokens.get(pos) {
-         if token.ty == TokenType::Accent {
+         if token.ty == Syn::Accent {
             let string = &self.input[token.pos + 1..token.pos + token.span];
             println!("[{}] `{}", pos, string);
             return ok(pos + 1, Node::String);
@@ -1188,7 +1188,7 @@ impl<'a, 'b> Parser<'a, 'b> {
 
    fn string(&self, pos: usize) -> Res {
       if let Some(token) = self.tokens.get(pos) {
-         if token.ty == TokenType::String {
+         if token.ty == Syn::String {
             let string = &self.input[token.pos + 1..token.pos + token.span - 1];
             println!("[{}] '{}'", pos, string);
             return ok(pos + 1, Node::String);
@@ -1200,7 +1200,7 @@ impl<'a, 'b> Parser<'a, 'b> {
 
    fn symbol(&self, pos: usize) -> Res {
       if let Some(token) = self.tokens.get(pos) {
-         if token.ty == TokenType::Symbol {
+         if token.ty == Syn::Symbol {
             let ident = &self.input[token.pos + 1..token.pos + token.span];
             println!("[{}] ^{}", pos, ident);
             return ok(pos + 1, Node::Symbol);
@@ -1210,7 +1210,7 @@ impl<'a, 'b> Parser<'a, 'b> {
       no()
    }
 
-   fn token_type(&self, pos: usize, ty: TokenType) -> Option<usize> {
+   fn token_type(&self, pos: usize, ty: Syn) -> Option<usize> {
       if let Some(token) = self.tokens.get(pos) {
          if token.ty == ty {
             println!("[{}] {:?}", pos, ty);
@@ -1229,7 +1229,7 @@ impl<'a, 'b> Parser<'a, 'b> {
 
          pos = self.skip_space(pos);
 
-         pos = self.skip_token_type(pos, TokenType::NewLine);
+         pos = self.skip_token_type(pos, Syn::NewLine);
 
          if pos == start {
             return pos;
@@ -1238,10 +1238,10 @@ impl<'a, 'b> Parser<'a, 'b> {
    }
 
    fn skip_space(&self, pos: usize) -> usize {
-      self.skip_token_type(pos, TokenType::Space)
+      self.skip_token_type(pos, Syn::Space)
    }
 
-   fn skip_token_type(&self, pos: usize, ty: TokenType) -> usize {
+   fn skip_token_type(&self, pos: usize, ty: Syn) -> usize {
       if let Some(token) = self.tokens.get(pos) {
          if token.ty == ty {
             println!("[{}] -> {:?}", pos, ty);

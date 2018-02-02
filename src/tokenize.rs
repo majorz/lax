@@ -1,6 +1,6 @@
 
 #[derive(Debug, Copy, Clone, PartialEq)]
-pub enum TokenType {
+pub enum Syn {
    Space,
    NewLine,
    Power,
@@ -52,30 +52,30 @@ pub enum TokenType {
 
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub struct Token {
-   pub ty: TokenType,
+   pub ty: Syn,
    pub span: usize,
    pub pos: usize,
    pub line: usize,
    pub col: usize,
 }
 
-type MatchRes = Option<(TokenType, usize)>;
+type MatchRes = Option<(Syn, usize)>;
 type MatchFn = fn(input: &str) -> MatchRes;
 
-const KEYWORD_MAP: [(&'static str, TokenType); 13] = [
-   ("fn",     TokenType::Fn),
-   ("loop",   TokenType::Loop),
-   ("match",  TokenType::Match),
-   ("if",     TokenType::If),
-   ("ef",     TokenType::Ef),
-   ("el",     TokenType::El),
-   ("break",  TokenType::Break),
-   ("ret",    TokenType::Ret),
-   ("for",    TokenType::For),
-   ("in",     TokenType::In),
-   ("and",    TokenType::And),
-   ("or",     TokenType::Or),
-   ("not",    TokenType::Not),
+const KEYWORD_MAP: [(&'static str, Syn); 13] = [
+   ("fn",     Syn::Fn),
+   ("loop",   Syn::Loop),
+   ("match",  Syn::Match),
+   ("if",     Syn::If),
+   ("ef",     Syn::Ef),
+   ("el",     Syn::El),
+   ("break",  Syn::Break),
+   ("ret",    Syn::Ret),
+   ("for",    Syn::For),
+   ("in",     Syn::In),
+   ("and",    Syn::And),
+   ("or",     Syn::Or),
+   ("not",    Syn::Not),
 ];
 
 #[inline]
@@ -103,35 +103,35 @@ macro_rules! exact {
    }
 }
 
-exact!("\n", match_new_line_n, TokenType::NewLine);
-exact!("\r\n", match_new_line_rn, TokenType::NewLine);
-exact!("\r", match_new_line_r, TokenType::NewLine);
-exact!("**", match_power, TokenType::Power);
-exact!("==", match_equal, TokenType::Equal);
-exact!("!=", match_unequal, TokenType::Unequal);
-exact!("<=", match_less_equal, TokenType::LessEqual);
-exact!(">=", match_greater_equal, TokenType::GreaterEqual);
-exact!("+=", match_add_assign, TokenType::AddAssign);
-exact!("-=", match_subtract_assign, TokenType::SubtractAssign);
-exact!("*=", match_multiply_assign, TokenType::MultiplyAssign);
-exact!("/=", match_divide_assign, TokenType::DivideAssign);
-exact!("..", match_range, TokenType::Range);
-exact!(".", match_dot, TokenType::Dot);
-exact!("=", match_assign, TokenType::Assign);
-exact!("+", match_add, TokenType::Add);
-exact!("-", match_subtract, TokenType::Subtract);
-exact!("*", match_multiply, TokenType::Multiply);
-exact!("/", match_divide, TokenType::Divide);
-exact!("|", match_bar, TokenType::Bar);
-exact!(":", match_colon, TokenType::Colon);
-exact!("(", match_paren_left, TokenType::ParenLeft);
-exact!(")", match_paren_right, TokenType::ParenRight);
-exact!("[", match_bracket_left, TokenType::BracketLeft);
-exact!("]", match_bracket_right, TokenType::BracketRight);
-exact!("<", match_angle_left, TokenType::AngleLeft);
-exact!(">", match_angle_right, TokenType::AngleRight);
-exact!("{", match_curly_left, TokenType::CurlyLeft);
-exact!("}", match_curly_right, TokenType::CurlyRight);
+exact!("\n", match_new_line_n, Syn::NewLine);
+exact!("\r\n", match_new_line_rn, Syn::NewLine);
+exact!("\r", match_new_line_r, Syn::NewLine);
+exact!("**", match_power, Syn::Power);
+exact!("==", match_equal, Syn::Equal);
+exact!("!=", match_unequal, Syn::Unequal);
+exact!("<=", match_less_equal, Syn::LessEqual);
+exact!(">=", match_greater_equal, Syn::GreaterEqual);
+exact!("+=", match_add_assign, Syn::AddAssign);
+exact!("-=", match_subtract_assign, Syn::SubtractAssign);
+exact!("*=", match_multiply_assign, Syn::MultiplyAssign);
+exact!("/=", match_divide_assign, Syn::DivideAssign);
+exact!("..", match_range, Syn::Range);
+exact!(".", match_dot, Syn::Dot);
+exact!("=", match_assign, Syn::Assign);
+exact!("+", match_add, Syn::Add);
+exact!("-", match_subtract, Syn::Subtract);
+exact!("*", match_multiply, Syn::Multiply);
+exact!("/", match_divide, Syn::Divide);
+exact!("|", match_bar, Syn::Bar);
+exact!(":", match_colon, Syn::Colon);
+exact!("(", match_paren_left, Syn::ParenLeft);
+exact!(")", match_paren_right, Syn::ParenRight);
+exact!("[", match_bracket_left, Syn::BracketLeft);
+exact!("]", match_bracket_right, Syn::BracketRight);
+exact!("<", match_angle_left, Syn::AngleLeft);
+exact!(">", match_angle_right, Syn::AngleRight);
+exact!("{", match_curly_left, Syn::CurlyLeft);
+exact!("}", match_curly_right, Syn::CurlyRight);
 
 fn match_space(input: &str) -> MatchRes {
    let mut pos = 0;
@@ -147,7 +147,7 @@ fn match_space(input: &str) -> MatchRes {
    if pos == 0 {
       return None;
    } else {
-      return Some((TokenType::Space, pos));
+      return Some((Syn::Space, pos));
    }
 }
 
@@ -162,8 +162,8 @@ fn match_symbol(input: &str) -> MatchRes {
       return None;
    }
 
-   if let Some((TokenType::Ident, pos)) = match_ident(&input[1..]) {
-      Some((TokenType::Symbol, pos + 1))
+   if let Some((Syn::Ident, pos)) = match_ident(&input[1..]) {
+      Some((Syn::Symbol, pos + 1))
    } else {
       None
    }
@@ -199,7 +199,7 @@ fn match_ident(input: &str) -> MatchRes {
       }
    }
 
-   Some((TokenType::Ident, pos))
+   Some((Syn::Ident, pos))
 }
 
 fn match_digits(input: &str) -> MatchRes {
@@ -214,7 +214,7 @@ fn match_digits(input: &str) -> MatchRes {
    }
 
    if pos != 0 {
-      Some((TokenType::Digits, pos))
+      Some((Syn::Digits, pos))
    } else {
       None
    }
@@ -240,7 +240,7 @@ fn match_accent(input: &str) -> MatchRes {
    };
 
    if bytes != 0 {
-      Some((TokenType::Accent, bytes + 1))
+      Some((Syn::Accent, bytes + 1))
    } else {
       None
    }
@@ -278,7 +278,7 @@ fn match_string(input: &str) -> MatchRes {
       }
    };
 
-   Some((TokenType::String, pos + 2))
+   Some((Syn::String, pos + 2))
 }
 
 const MATCH_FNS: [MatchFn; 35] = [
@@ -338,7 +338,7 @@ pub fn tokenize(input: &str) -> Vec<Token> {
             }
          );
 
-         if ty == TokenType::NewLine {
+         if ty == Syn::NewLine {
             line += 1;
             col = 1;
          }
@@ -397,8 +397,8 @@ mod tests {
    fn exact() {
       m!(match_power, "*");
       m!(match_power, "-**");
-      m!(match_power, "**", TokenType::Power, 2);
-      m!(match_power, "****", TokenType::Power, 2);
+      m!(match_power, "**", Syn::Power, 2);
+      m!(match_power, "****", Syn::Power, 2);
    }
 
    #[test]
@@ -413,10 +413,10 @@ mod tests {
       m!(match_space, "");
       m!(match_space, "-");
       m!(match_space, "- ");
-      m!(match_space, " ", TokenType::Space, 1);
-      m!(match_space, " -", TokenType::Space, 1);
-      m!(match_space, "   ", TokenType::Space, 3);
-      m!(match_space, "   -", TokenType::Space, 3);
+      m!(match_space, " ", Syn::Space, 1);
+      m!(match_space, " -", Syn::Space, 1);
+      m!(match_space, "   ", Syn::Space, 3);
+      m!(match_space, "   -", Syn::Space, 3);
    }
 
    #[test]
@@ -428,17 +428,17 @@ mod tests {
       m!(match_symbol, "^-");
       m!(match_symbol, "^Я");
       m!(match_symbol, "^for");
-      m!(match_symbol, "^_", TokenType::Symbol, 2);
-      m!(match_symbol, "^__", TokenType::Symbol, 3);
-      m!(match_symbol, "^_.", TokenType::Symbol, 2);
-      m!(match_symbol, "^_name", TokenType::Symbol, 6);
-      m!(match_symbol, "^name", TokenType::Symbol, 5);
-      m!(match_symbol, "^_NAME.", TokenType::Symbol, 6);
-      m!(match_symbol, "^NAME.", TokenType::Symbol, 5);
-      m!(match_symbol, "^a100", TokenType::Symbol, 5);
-      m!(match_symbol, "^a100.", TokenType::Symbol, 5);
-      m!(match_symbol, "^a_a_a.", TokenType::Symbol, 6);
-      m!(match_symbol, "^aЯ", TokenType::Symbol, 2);
+      m!(match_symbol, "^_", Syn::Symbol, 2);
+      m!(match_symbol, "^__", Syn::Symbol, 3);
+      m!(match_symbol, "^_.", Syn::Symbol, 2);
+      m!(match_symbol, "^_name", Syn::Symbol, 6);
+      m!(match_symbol, "^name", Syn::Symbol, 5);
+      m!(match_symbol, "^_NAME.", Syn::Symbol, 6);
+      m!(match_symbol, "^NAME.", Syn::Symbol, 5);
+      m!(match_symbol, "^a100", Syn::Symbol, 5);
+      m!(match_symbol, "^a100.", Syn::Symbol, 5);
+      m!(match_symbol, "^a_a_a.", Syn::Symbol, 6);
+      m!(match_symbol, "^aЯ", Syn::Symbol, 2);
    }
 
    #[test]
@@ -453,17 +453,17 @@ mod tests {
       m!(match_ident, "-");
       m!(match_ident, "-name");
       m!(match_ident, "012abc");
-      m!(match_ident, "_", TokenType::Ident, 1);
-      m!(match_ident, "__", TokenType::Ident, 2);
-      m!(match_ident, "_.", TokenType::Ident, 1);
-      m!(match_ident, "_name", TokenType::Ident, 5);
-      m!(match_ident, "name", TokenType::Ident, 4);
-      m!(match_ident, "_NAME.", TokenType::Ident, 5);
-      m!(match_ident, "NAME.", TokenType::Ident, 4);
-      m!(match_ident, "a100", TokenType::Ident, 4);
-      m!(match_ident, "a100.", TokenType::Ident, 4);
-      m!(match_ident, "a_a_a.", TokenType::Ident, 5);
-      m!(match_ident, "aЯ", TokenType::Ident, 1);
+      m!(match_ident, "_", Syn::Ident, 1);
+      m!(match_ident, "__", Syn::Ident, 2);
+      m!(match_ident, "_.", Syn::Ident, 1);
+      m!(match_ident, "_name", Syn::Ident, 5);
+      m!(match_ident, "name", Syn::Ident, 4);
+      m!(match_ident, "_NAME.", Syn::Ident, 5);
+      m!(match_ident, "NAME.", Syn::Ident, 4);
+      m!(match_ident, "a100", Syn::Ident, 4);
+      m!(match_ident, "a100.", Syn::Ident, 4);
+      m!(match_ident, "a_a_a.", Syn::Ident, 5);
+      m!(match_ident, "aЯ", Syn::Ident, 1);
    }
 
    #[test]
@@ -475,51 +475,51 @@ mod tests {
 
    #[test]
    fn keyword() {
-      m!(match_ident, "fn", TokenType::Fn, 2);
-      m!(match_ident, "loop", TokenType::Loop, 4);
-      m!(match_ident, "match", TokenType::Match, 5);
-      m!(match_ident, "if", TokenType::If, 2);
-      m!(match_ident, "ef", TokenType::Ef, 2);
-      m!(match_ident, "el", TokenType::El, 2);
-      m!(match_ident, "break", TokenType::Break, 5);
-      m!(match_ident, "ret", TokenType::Ret, 3);
-      m!(match_ident, "for", TokenType::For, 3);
-      m!(match_ident, "in", TokenType::In, 2);
-      m!(match_ident, "and", TokenType::And, 3);
-      m!(match_ident, "or", TokenType::Or, 2);
-      m!(match_ident, "not", TokenType::Not, 3);
-      m!(match_ident, "for", TokenType::For, 3);
-      m!(match_ident, "break_", TokenType::Ident, 6);
-      m!(match_ident, "ret100", TokenType::Ident, 6);
+      m!(match_ident, "fn", Syn::Fn, 2);
+      m!(match_ident, "loop", Syn::Loop, 4);
+      m!(match_ident, "match", Syn::Match, 5);
+      m!(match_ident, "if", Syn::If, 2);
+      m!(match_ident, "ef", Syn::Ef, 2);
+      m!(match_ident, "el", Syn::El, 2);
+      m!(match_ident, "break", Syn::Break, 5);
+      m!(match_ident, "ret", Syn::Ret, 3);
+      m!(match_ident, "for", Syn::For, 3);
+      m!(match_ident, "in", Syn::In, 2);
+      m!(match_ident, "and", Syn::And, 3);
+      m!(match_ident, "or", Syn::Or, 2);
+      m!(match_ident, "not", Syn::Not, 3);
+      m!(match_ident, "for", Syn::For, 3);
+      m!(match_ident, "break_", Syn::Ident, 6);
+      m!(match_ident, "ret100", Syn::Ident, 6);
    }
 
    #[test]
    fn digits() {
       m!(match_digits, "");
       m!(match_digits, " 1");
-      m!(match_digits, "0", TokenType::Digits, 1);
-      m!(match_digits, "1", TokenType::Digits, 1);
-      m!(match_digits, "0000000000.", TokenType::Digits, 10);
-      m!(match_digits, "0123456789.", TokenType::Digits, 10);
-      m!(match_digits, "9876543210.", TokenType::Digits, 10);
+      m!(match_digits, "0", Syn::Digits, 1);
+      m!(match_digits, "1", Syn::Digits, 1);
+      m!(match_digits, "0000000000.", Syn::Digits, 10);
+      m!(match_digits, "0123456789.", Syn::Digits, 10);
+      m!(match_digits, "9876543210.", Syn::Digits, 10);
    }
 
    #[test]
    fn accent() {
       m!(match_accent, "-");
       m!(match_accent, "`");
-      m!(match_accent, "`a", TokenType::Accent, 2);
-      m!(match_accent, "`Я", TokenType::Accent, 3);
-      m!(match_accent, "`y̆", TokenType::Accent, 4);
-      m!(match_accent, "`ЯaЯaЯ ", TokenType::Accent, 9);
-      m!(match_accent, "````", TokenType::Accent, 4);
-      m!(match_accent, "````\n", TokenType::Accent, 4);
-      m!(match_accent, "````\r\n", TokenType::Accent, 4);
-      m!(match_accent, "`abc) ", TokenType::Accent, 4);
-      m!(match_accent, "`abc\n ", TokenType::Accent, 4);
-      m!(match_accent, "`abc\r\n ", TokenType::Accent, 4);
-      m!(match_accent, "`abc  ", TokenType::Accent, 4);
-      m!(match_accent, "`abc\\) ", TokenType::Accent, 5);
+      m!(match_accent, "`a", Syn::Accent, 2);
+      m!(match_accent, "`Я", Syn::Accent, 3);
+      m!(match_accent, "`y̆", Syn::Accent, 4);
+      m!(match_accent, "`ЯaЯaЯ ", Syn::Accent, 9);
+      m!(match_accent, "````", Syn::Accent, 4);
+      m!(match_accent, "````\n", Syn::Accent, 4);
+      m!(match_accent, "````\r\n", Syn::Accent, 4);
+      m!(match_accent, "`abc) ", Syn::Accent, 4);
+      m!(match_accent, "`abc\n ", Syn::Accent, 4);
+      m!(match_accent, "`abc\r\n ", Syn::Accent, 4);
+      m!(match_accent, "`abc  ", Syn::Accent, 4);
+      m!(match_accent, "`abc\\) ", Syn::Accent, 5);
    }
 
    #[test]
@@ -540,27 +540,27 @@ mod tests {
       m!(match_string, "'a\\ '");
       m!(match_string, "'aaa\\abbb'");
       m!(match_string, "'aaa\\\"bbb'");
-      m!(match_string, "''", TokenType::String, 2);
-      m!(match_string, "'a'", TokenType::String, 3);
-      m!(match_string, "'Я'", TokenType::String, 4);
-      m!(match_string, "'y̆'", TokenType::String, 5);
-      m!(match_string, "'ЯaЯaЯ'", TokenType::String, 10);
-      m!(match_string, "'''", TokenType::String, 2);
-      m!(match_string, "'aaa bbb'", TokenType::String, 9);
-      m!(match_string, "'aaa bbb' ", TokenType::String, 9);
-      m!(match_string, "'aaa bbb'ccc", TokenType::String, 9);
-      m!(match_string, "'aaa\nbbb\nccc'", TokenType::String, 13);
-      m!(match_string, "'aaa\nbbb\nccc'\n", TokenType::String, 13);
-      m!(match_string, "'aaa\nbbb\nccc'", TokenType::String, 13);
-      m!(match_string, "'aaa\r\nbbb\r\nccc'", TokenType::String, 15);
-      m!(match_string, "'aaa\r\nbbb\r\nccc'\r\n", TokenType::String, 15);
-      m!(match_string, "'aaa\r\nbbb\r\nccc'", TokenType::String, 15);
-      m!(match_string, "'aaa\\nbbb'", TokenType::String, 10);
-      m!(match_string, "'aaa\\rbbb'", TokenType::String, 10);
-      m!(match_string, "'aaa\\tbbb'", TokenType::String, 10);
-      m!(match_string, "'aaa\\\\bbb'", TokenType::String, 10);
-      m!(match_string, "'aaa\\\'bbb'", TokenType::String, 10);
-      m!(match_string, "'aaa\\0bbb'", TokenType::String, 10);
+      m!(match_string, "''", Syn::String, 2);
+      m!(match_string, "'a'", Syn::String, 3);
+      m!(match_string, "'Я'", Syn::String, 4);
+      m!(match_string, "'y̆'", Syn::String, 5);
+      m!(match_string, "'ЯaЯaЯ'", Syn::String, 10);
+      m!(match_string, "'''", Syn::String, 2);
+      m!(match_string, "'aaa bbb'", Syn::String, 9);
+      m!(match_string, "'aaa bbb' ", Syn::String, 9);
+      m!(match_string, "'aaa bbb'ccc", Syn::String, 9);
+      m!(match_string, "'aaa\nbbb\nccc'", Syn::String, 13);
+      m!(match_string, "'aaa\nbbb\nccc'\n", Syn::String, 13);
+      m!(match_string, "'aaa\nbbb\nccc'", Syn::String, 13);
+      m!(match_string, "'aaa\r\nbbb\r\nccc'", Syn::String, 15);
+      m!(match_string, "'aaa\r\nbbb\r\nccc'\r\n", Syn::String, 15);
+      m!(match_string, "'aaa\r\nbbb\r\nccc'", Syn::String, 15);
+      m!(match_string, "'aaa\\nbbb'", Syn::String, 10);
+      m!(match_string, "'aaa\\rbbb'", Syn::String, 10);
+      m!(match_string, "'aaa\\tbbb'", Syn::String, 10);
+      m!(match_string, "'aaa\\\\bbb'", Syn::String, 10);
+      m!(match_string, "'aaa\\\'bbb'", Syn::String, 10);
+      m!(match_string, "'aaa\\0bbb'", Syn::String, 10);
    }
 
    #[test]
