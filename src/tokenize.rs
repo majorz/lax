@@ -103,7 +103,9 @@ macro_rules! exact {
    }
 }
 
-exact!("\n", match_new_line, TokenType::NewLine);
+exact!("\n", match_new_line_n, TokenType::NewLine);
+exact!("\r\n", match_new_line_rn, TokenType::NewLine);
+exact!("\r", match_new_line_r, TokenType::NewLine);
 exact!("**", match_power, TokenType::Power);
 exact!("==", match_equal, TokenType::Equal);
 exact!("!=", match_unequal, TokenType::Unequal);
@@ -229,7 +231,7 @@ fn match_accent(input: &str) -> MatchRes {
 
    let bytes = loop {
       if let Some((i, ch)) = indices.next() {
-         if ch == ' ' || ch == '\n' || ch == ')' {
+         if ch == ' ' || ch == '\n' || ch == '\r' || ch == ')' {
             break i;
          }
       } else {
@@ -279,9 +281,11 @@ fn match_string(input: &str) -> MatchRes {
    Some((TokenType::String, pos + 2))
 }
 
-const MATCH_FNS: [MatchFn; 33] = [
+const MATCH_FNS: [MatchFn; 35] = [
    match_space,
-   match_new_line,
+   match_new_line_n,
+   match_new_line_rn,
+   match_new_line_r,
    match_power,
    match_equal,
    match_unequal,
@@ -510,8 +514,10 @@ mod tests {
       m!(match_accent, "`ЯaЯaЯ ", TokenType::Accent, 9);
       m!(match_accent, "````", TokenType::Accent, 4);
       m!(match_accent, "````\n", TokenType::Accent, 4);
+      m!(match_accent, "````\r\n", TokenType::Accent, 4);
       m!(match_accent, "`abc) ", TokenType::Accent, 4);
       m!(match_accent, "`abc\n ", TokenType::Accent, 4);
+      m!(match_accent, "`abc\r\n ", TokenType::Accent, 4);
       m!(match_accent, "`abc  ", TokenType::Accent, 4);
       m!(match_accent, "`abc\\) ", TokenType::Accent, 5);
    }
@@ -546,6 +552,9 @@ mod tests {
       m!(match_string, "'aaa\nbbb\nccc'", TokenType::String, 13);
       m!(match_string, "'aaa\nbbb\nccc'\n", TokenType::String, 13);
       m!(match_string, "'aaa\nbbb\nccc'", TokenType::String, 13);
+      m!(match_string, "'aaa\r\nbbb\r\nccc'", TokenType::String, 15);
+      m!(match_string, "'aaa\r\nbbb\r\nccc'\r\n", TokenType::String, 15);
+      m!(match_string, "'aaa\r\nbbb\r\nccc'", TokenType::String, 15);
       m!(match_string, "'aaa\\nbbb'", TokenType::String, 10);
       m!(match_string, "'aaa\\rbbb'", TokenType::String, 10);
       m!(match_string, "'aaa\\tbbb'", TokenType::String, 10);
