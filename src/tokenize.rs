@@ -218,36 +218,27 @@ fn match_digits(input: &str) -> MatchRes {
    }
 }
 
-fn match_accent(input: &str) -> MatchRes {
+pub fn match_accent(input: &str) -> MatchRes {
+   debug_assert!(!input.is_empty());
+
    if input.as_bytes()[0] != b'`' {
       return None;
    }
 
    let mut indices = input[1..].char_indices();
-   let mut pos = 0;
 
-   loop {
+   let bytes = loop {
       if let Some((i, ch)) = indices.next() {
-         pos = i;
-         if ch == '\\' {
-            if let Some((j, ch)) = indices.next() {
-               pos = j;
-               if ch == ' ' || ch == '\n' {
-                  break;
-               }
-            } else {
-               break;
-            }
-         } else if ch == ' ' || ch == '\n' || ch == ')' {
-            break;
+         if ch == ' ' || ch == '\n' || ch == ')' {
+            break i;
          }
       } else {
-         break;
+         break input.len() - 1;
       }
-   }
+   };
 
-   if pos != 0 {
-      Some((TokenType::Accent, pos + 1))
+   if bytes != 0 {
+      Some((TokenType::Accent, bytes + 1))
    } else {
       None
    }
@@ -504,5 +495,28 @@ mod tests {
       m!(match_digits, "0000000000.", TokenType::Digits, 10);
       m!(match_digits, "0123456789.", TokenType::Digits, 10);
       m!(match_digits, "9876543210.", TokenType::Digits, 10);
+   }
+
+   #[test]
+   fn accent() {
+      m!(match_accent, "-");
+      m!(match_accent, "`");
+      m!(match_accent, "`a", TokenType::Accent, 2);
+      m!(match_accent, "`Я", TokenType::Accent, 3);
+      m!(match_accent, "`y̆", TokenType::Accent, 4);
+      m!(match_accent, "`ЯaЯaЯ ", TokenType::Accent, 9);
+      m!(match_accent, "````", TokenType::Accent, 4);
+      m!(match_accent, "````\n", TokenType::Accent, 4);
+      m!(match_accent, "`abc) ", TokenType::Accent, 4);
+      m!(match_accent, "`abc\n ", TokenType::Accent, 4);
+      m!(match_accent, "`abc  ", TokenType::Accent, 4);
+      m!(match_accent, "`abc\\) ", TokenType::Accent, 5);
+   }
+
+   #[test]
+   #[should_panic]
+   #[cfg(debug_assertions)]
+   fn accent_empty() {
+      match_accent("");
    }
 }
