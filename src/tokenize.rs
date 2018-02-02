@@ -218,7 +218,7 @@ fn match_digits(input: &str) -> MatchRes {
    }
 }
 
-pub fn match_accent(input: &str) -> MatchRes {
+fn match_accent(input: &str) -> MatchRes {
    debug_assert!(!input.is_empty());
 
    if input.as_bytes()[0] != b'`' {
@@ -245,35 +245,38 @@ pub fn match_accent(input: &str) -> MatchRes {
 }
 
 fn match_string(input: &str) -> MatchRes {
+   debug_assert!(!input.is_empty());
+
    if input.as_bytes()[0] != b'\'' {
       return None;
    }
 
    let mut indices = input[1..].char_indices();
-   let pos;
 
-   loop {
+   let pos = loop {
       if let Some((i, ch)) = indices.next() {
-         if ch == '\\' {
-            if let Some((_, ch)) = indices.next() {
-               if ch == '\n' {
+         match ch {
+            '\\' => {
+               if let Some((_, ch)) = indices.next() {
+                  match ch {
+                     'n' | 'r' | 't' | '\\' | '\'' | '0' => {},
+                     _ => return None
+                  }
+               } else {
                   return None;
                }
-            } else {
-               return None;
-            }
-         } else if ch == '\n' {
-            return None;
-         } else if ch == '\'' {
-            pos = i;
-            break;
+            },
+            '\'' => {
+               break i;
+            },
+            _ => {}
          }
       } else {
          return None;
       }
-   }
+   };
 
-   Some((TokenType::Accent, pos + 2))
+   Some((TokenType::String, pos + 2))
 }
 
 const MATCH_FNS: [MatchFn; 33] = [
@@ -518,5 +521,43 @@ mod tests {
    #[cfg(debug_assertions)]
    fn accent_empty() {
       match_accent("");
+   }
+
+   #[test]
+   fn string() {
+      m!(match_string, "-");
+      m!(match_string, "-''");
+      m!(match_string, "'");
+      m!(match_string, "'a");
+      m!(match_string, "'ЯaЯaЯ");
+      m!(match_string, "'a\\'");
+      m!(match_string, "'a\\ '");
+      m!(match_string, "'aaa\\abbb'");
+      m!(match_string, "'aaa\\\"bbb'");
+      m!(match_string, "''", TokenType::String, 2);
+      m!(match_string, "'a'", TokenType::String, 3);
+      m!(match_string, "'Я'", TokenType::String, 4);
+      m!(match_string, "'y̆'", TokenType::String, 5);
+      m!(match_string, "'ЯaЯaЯ'", TokenType::String, 10);
+      m!(match_string, "'''", TokenType::String, 2);
+      m!(match_string, "'aaa bbb'", TokenType::String, 9);
+      m!(match_string, "'aaa bbb' ", TokenType::String, 9);
+      m!(match_string, "'aaa bbb'ccc", TokenType::String, 9);
+      m!(match_string, "'aaa\nbbb\nccc'", TokenType::String, 13);
+      m!(match_string, "'aaa\nbbb\nccc'\n", TokenType::String, 13);
+      m!(match_string, "'aaa\nbbb\nccc'", TokenType::String, 13);
+      m!(match_string, "'aaa\\nbbb'", TokenType::String, 10);
+      m!(match_string, "'aaa\\rbbb'", TokenType::String, 10);
+      m!(match_string, "'aaa\\tbbb'", TokenType::String, 10);
+      m!(match_string, "'aaa\\\\bbb'", TokenType::String, 10);
+      m!(match_string, "'aaa\\\'bbb'", TokenType::String, 10);
+      m!(match_string, "'aaa\\0bbb'", TokenType::String, 10);
+   }
+
+   #[test]
+   #[should_panic]
+   #[cfg(debug_assertions)]
+   fn string_empty() {
+      match_string("");
    }
 }
