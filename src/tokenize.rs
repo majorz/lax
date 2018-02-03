@@ -59,8 +59,8 @@ pub struct Token {
    pub col: usize,
 }
 
-type MatchRes = Option<(Syn, usize)>;
-type MatchFn = fn(input: &str) -> MatchRes;
+type SynMatch = Option<(Syn, usize)>;
+type SynMatchFn = fn(input: &str) -> SynMatch;
 
 const KEYWORD_MAP: [(&'static str, Syn); 13] = [
    ("fn",     Syn::Fn),
@@ -93,7 +93,7 @@ fn consume_start(input: &str, item: &'static str) -> Option<usize> {
 macro_rules! exact {
    ($string:expr, $func:ident, $token_type:expr) => {
       #[inline]
-      fn $func(input: &str) -> MatchRes {
+      fn $func(input: &str) -> SynMatch {
          if let Some(item_len) = consume_start(input, $string) {
             Some(($token_type, item_len))
          } else {
@@ -133,7 +133,7 @@ exact!(">", match_angle_right, Syn::AngleRight);
 exact!("{", match_curly_left, Syn::CurlyLeft);
 exact!("}", match_curly_right, Syn::CurlyRight);
 
-fn match_space(input: &str) -> MatchRes {
+fn match_space(input: &str) -> SynMatch {
    let mut pos = 0;
 
    for c in input.bytes() {
@@ -151,7 +151,7 @@ fn match_space(input: &str) -> MatchRes {
    }
 }
 
-fn match_symbol(input: &str) -> MatchRes {
+fn match_symbol(input: &str) -> SynMatch {
    debug_assert!(!input.is_empty());
 
    if input.len() == 1 {
@@ -169,7 +169,7 @@ fn match_symbol(input: &str) -> MatchRes {
    }
 }
 
-fn match_ident(input: &str) -> MatchRes {
+fn match_ident(input: &str) -> SynMatch {
    debug_assert!(!input.is_empty());
 
    let c = input.as_bytes()[0];
@@ -202,7 +202,7 @@ fn match_ident(input: &str) -> MatchRes {
    Some((Syn::Ident, pos))
 }
 
-fn match_digits(input: &str) -> MatchRes {
+fn match_digits(input: &str) -> SynMatch {
    let mut pos = 0;
 
    for c in input.as_bytes() {
@@ -220,7 +220,7 @@ fn match_digits(input: &str) -> MatchRes {
    }
 }
 
-fn match_accent(input: &str) -> MatchRes {
+fn match_accent(input: &str) -> SynMatch {
    debug_assert!(!input.is_empty());
 
    if input.as_bytes()[0] != b'`' {
@@ -246,7 +246,7 @@ fn match_accent(input: &str) -> MatchRes {
    }
 }
 
-fn match_string(input: &str) -> MatchRes {
+fn match_string(input: &str) -> SynMatch {
    debug_assert!(!input.is_empty());
 
    if input.as_bytes()[0] != b'\'' {
@@ -281,7 +281,7 @@ fn match_string(input: &str) -> MatchRes {
    Some((Syn::String, pos + 2))
 }
 
-const MATCH_FNS: [MatchFn; 35] = [
+const MATCH_FNS: [SynMatchFn; 35] = [
    match_space,
    match_new_line_n,
    match_new_line_rn,
@@ -353,7 +353,7 @@ pub fn tokenize(input: &str) -> Vec<Token> {
    tokens
 }
 
-fn match_token(input: &str) -> MatchRes {
+fn match_token(input: &str) -> SynMatch {
    for matcher in MATCH_FNS.iter() {
       if let Some((syn, span)) = matcher(input) {
          return Some((syn, span));
