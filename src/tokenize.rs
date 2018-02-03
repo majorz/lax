@@ -50,19 +50,7 @@ pub enum Syn {
    In,
 }
 
-#[derive(Debug, Copy, Clone, PartialEq)]
-pub struct Token {
-   pub syn: Syn,
-   pub span: usize,
-   pub pos: usize,
-   pub line: usize,
-   pub col: usize,
-}
-
-type SynMatch = Option<(Syn, usize, usize)>;
-type SynMatchFn = fn(input: &str) -> SynMatch;
-
-const KEYWORD_MAP: [(&'static str, Syn); 13] = [
+const KEYWORDS: [(&'static str, Syn); 13] = [
    ("fn",     Syn::Fn),
    ("loop",   Syn::Loop),
    ("match",  Syn::Match),
@@ -77,6 +65,17 @@ const KEYWORD_MAP: [(&'static str, Syn); 13] = [
    ("or",     Syn::Or),
    ("not",    Syn::Not),
 ];
+
+#[derive(Debug, Copy, Clone, PartialEq)]
+pub struct Token {
+   pub syn: Syn,
+   pub span: usize,
+   pub pos: usize,
+   pub line: usize,
+   pub col: usize,
+}
+
+type SynMatch = Option<(Syn, usize, usize)>;
 
 #[inline]
 fn consume_start(input: &str, item: &'static str) -> Option<usize> {
@@ -190,7 +189,7 @@ fn match_ident(input: &str) -> SynMatch {
       }
    }
 
-   for &(keyword, keyword_ty) in KEYWORD_MAP.iter() {
+   for &(keyword, keyword_ty) in KEYWORDS.iter() {
       if keyword == &input[..pos] {
          return Some((keyword_ty, pos, pos));
       }
@@ -277,7 +276,7 @@ fn match_string(input: &str) -> SynMatch {
    Some((Syn::String, pos + 2, chars + 2))
 }
 
-const MATCH_FNS: [SynMatchFn; 35] = [
+const MATCH_FNS: [fn(input: &str) -> SynMatch; 35] = [
    match_space,
    match_new_line_n,
    match_new_line_rn,
