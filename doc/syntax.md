@@ -1,4 +1,4 @@
-# Nel Spec
+# Syntax Directions
 
 
 ### Function
@@ -15,7 +15,7 @@ z = add(x y)
 o = add(20 40)
 ```
 
-### Grouping
+### Nesting
 
 ```
 xs = add(mul(10 30) mul(20 30))
@@ -24,43 +24,50 @@ xs = add(mul(10 30) mul(20 30))
 ### List [1]
 
 ```
-xs = [10 40 60]
+xs = 10 40 60
 ```
 
 ### List [2]
 
 ```
-xs = [dda(10) lum(5) vid(9)]
+xs = dda(10) lum(5) vid(9)
 ```
 
 ### List [3]
 
 ```
-xs = [
+xs = (
    dda(10)
    lum(5)
    vid(9)
-]
+)
+```
+
+### List [4]
+
+```
+xs = (20 + 40) (30 - 15)
 ```
 
 ### Map [1]
 
 ```
-m = {
+m = map
    2: 100
    6: 200
    9: 250
-}
 ```
 
 ### Map [2]
 
 ```
-m = {
-   ^first: 100
+m = map
+   ^first:
+      q = x * y
+      p = x + y
+      q + p
    ^second: 200
    ^third: 250
-}
 ```
 
 ### If [1]
@@ -68,32 +75,18 @@ m = {
 ```
 if x == 10
    10
-else
+el
    40
 ```
 
 ### If [2]
 
 ```
-if x == 10: 10
-else
-   40
-```
-
-### If [3]
-
-```
-y = if x == 10: 10 else 40
-```
-
-### If [4]
-
-```
 if x == 10
       and y == 20
       and z == 50
    10
-else
+el
    40
 ```
 
