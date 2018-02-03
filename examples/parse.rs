@@ -18,7 +18,7 @@ fn main() {
 
 /*
    for (i, token) in tokens.iter().enumerate() {
-      println!("[{}] {:?} {}, {} - {}, {}", i, token.ty, token.pos, token.span, token.line, token.col);
+      println!("[{}] {:?} {}, {} - {}, {}", i, token.syn, token.pos, token.span, token.line, token.col);
    }
 */
 

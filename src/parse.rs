@@ -108,7 +108,7 @@ impl<'a, 'b> Parser<'a, 'b> {
 
       for (i, token) in slice.iter().enumerate() {
          let name = &self.input[token.pos..token.pos + token.span];
-         println!("[{}] {:?} {:?}", start+i, token.ty, name);
+         println!("[{}] {:?} {:?}", start+i, token.syn, name);
       }
    }
 
@@ -603,10 +603,10 @@ impl<'a, 'b> Parser<'a, 'b> {
       ok(current, ast)
    }
 
-   fn assign_type(&self, pos: usize, indent: usize, ty: Syn, node: Node) -> Res {
+   fn assign_type(&self, pos: usize, indent: usize, syn: Syn, node: Node) -> Res {
       let mut current = pos;
 
-      if let Some(pos) = self.token_type(current, ty) {
+      if let Some(pos) = self.token_type(current, syn) {
          current = pos;
       } else {
          return no();
@@ -722,10 +722,10 @@ impl<'a, 'b> Parser<'a, 'b> {
       ok(current, ast)
    }
 
-   fn binary_type(&self, pos: usize, ty: Syn, node: Node) -> Res {
+   fn binary_type(&self, pos: usize, syn: Syn, node: Node) -> Res {
       let mut current = pos;
 
-      if let Some(pos) = self.token_type(current, ty) {
+      if let Some(pos) = self.token_type(current, syn) {
          current = pos;
       } else {
          return no();
@@ -1066,7 +1066,7 @@ impl<'a, 'b> Parser<'a, 'b> {
       }
 
       if let Some(token) = self.tokens.get(pos) {
-         if token.ty == Syn::Space {
+         if token.syn == Syn::Space {
             if token.span == indent * INDENT {
                println!("[{}] indent {}", pos, indent);
                return Some(pos + 1);
@@ -1162,7 +1162,7 @@ impl<'a, 'b> Parser<'a, 'b> {
 
    fn eol_eof(&self, pos: usize) -> Option<usize> {
       if let Some(token) = self.tokens.get(pos) {
-         if token.ty == Syn::NewLine {
+         if token.syn == Syn::NewLine {
             println!("[{}] eol", pos);
             Some(pos + 1)
          } else {
@@ -1176,7 +1176,7 @@ impl<'a, 'b> Parser<'a, 'b> {
 
    fn accent(&self, pos: usize) -> Res {
       if let Some(token) = self.tokens.get(pos) {
-         if token.ty == Syn::Accent {
+         if token.syn == Syn::Accent {
             let string = &self.input[token.pos + 1..token.pos + token.span];
             println!("[{}] `{}", pos, string);
             return ok(pos + 1, Node::String);
@@ -1188,7 +1188,7 @@ impl<'a, 'b> Parser<'a, 'b> {
 
    fn string(&self, pos: usize) -> Res {
       if let Some(token) = self.tokens.get(pos) {
-         if token.ty == Syn::String {
+         if token.syn == Syn::String {
             let string = &self.input[token.pos + 1..token.pos + token.span - 1];
             println!("[{}] '{}'", pos, string);
             return ok(pos + 1, Node::String);
@@ -1200,7 +1200,7 @@ impl<'a, 'b> Parser<'a, 'b> {
 
    fn symbol(&self, pos: usize) -> Res {
       if let Some(token) = self.tokens.get(pos) {
-         if token.ty == Syn::Symbol {
+         if token.syn == Syn::Symbol {
             let ident = &self.input[token.pos + 1..token.pos + token.span];
             println!("[{}] ^{}", pos, ident);
             return ok(pos + 1, Node::Symbol);
@@ -1210,10 +1210,10 @@ impl<'a, 'b> Parser<'a, 'b> {
       no()
    }
 
-   fn token_type(&self, pos: usize, ty: Syn) -> Option<usize> {
+   fn token_type(&self, pos: usize, syn: Syn) -> Option<usize> {
       if let Some(token) = self.tokens.get(pos) {
-         if token.ty == ty {
-            println!("[{}] {:?}", pos, ty);
+         if token.syn == syn {
+            println!("[{}] {:?}", pos, syn);
             return Some(pos + 1);
          }
       }
@@ -1241,10 +1241,10 @@ impl<'a, 'b> Parser<'a, 'b> {
       self.skip_token_type(pos, Syn::Space)
    }
 
-   fn skip_token_type(&self, pos: usize, ty: Syn) -> usize {
+   fn skip_token_type(&self, pos: usize, syn: Syn) -> usize {
       if let Some(token) = self.tokens.get(pos) {
-         if token.ty == ty {
-            println!("[{}] -> {:?}", pos, ty);
+         if token.syn == syn {
+            println!("[{}] -> {:?}", pos, syn);
             return pos + 1;
          }
       }

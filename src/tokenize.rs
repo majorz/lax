@@ -52,7 +52,7 @@ pub enum Syn {
 
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub struct Token {
-   pub ty: Syn,
+   pub syn: Syn,
    pub span: usize,
    pub pos: usize,
    pub line: usize,
@@ -327,10 +327,10 @@ pub fn tokenize(input: &str) -> Vec<Token> {
    let mut col = 1;
 
    while pos < input.len() {
-      if let Some((ty, span)) = match_token(&input[pos..]) {
+      if let Some((syn, span)) = match_token(&input[pos..]) {
          tokens.push(
             Token {
-               ty,
+               syn,
                span,
                pos,
                line,
@@ -338,7 +338,7 @@ pub fn tokenize(input: &str) -> Vec<Token> {
             }
          );
 
-         if ty == Syn::NewLine {
+         if syn == Syn::NewLine {
             line += 1;
             col = 1;
          }
@@ -355,8 +355,8 @@ pub fn tokenize(input: &str) -> Vec<Token> {
 
 fn match_token(input: &str) -> MatchRes {
    for matcher in MATCH_FNS.iter() {
-      if let Some((ty, span)) = matcher(input) {
-         return Some((ty, span));
+      if let Some((syn, span)) = matcher(input) {
+         return Some((syn, span));
       }
    }
 
@@ -372,8 +372,8 @@ mod tests {
          assert_eq!($matcher($input), None);
       );
 
-      ($matcher:ident, $input:expr, $ty:expr, $span:expr) => (
-         assert_eq!($matcher($input), Some(($ty, $span)));
+      ($matcher:ident, $input:expr, $syn:expr, $span:expr) => (
+         assert_eq!($matcher($input), Some(($syn, $span)));
       );
    }
 
