@@ -94,11 +94,8 @@ macro_rules! exact {
    ($string:expr, $func:ident, $token_type:expr) => {
       #[inline]
       fn $func(input: &str) -> SynMatch {
-         if let Some(item_len) = consume_start(input, $string) {
-            Some(($token_type, item_len, item_len))
-         } else {
-            None
-         }
+         let item_len = consume_start(input, $string)?;
+         Some(($token_type, item_len, item_len))
       }
    }
 }
@@ -259,26 +256,20 @@ fn match_string(input: &str) -> SynMatch {
    let mut chars = 0;
 
    let pos = loop {
-      if let Some((i, ch)) = indices.next() {
-         match ch {
-            '\\' => {
-               if let Some((_, ch)) = indices.next() {
-                  match ch {
-                     'n' | 'r' | 't' | '\\' | '\'' | '0' => {},
-                     _ => return None
-                  }
-               } else {
-                  return None;
-               }
-               chars += 1;
-            },
-            '\'' => {
-               break i;
-            },
-            _ => {}
-         }
-      } else {
-         return None;
+      let (i, ch) = indices.next()?;
+      match ch {
+         '\\' => {
+            let (_, ch) = indices.next()?;
+            match ch {
+               'n' | 'r' | 't' | '\\' | '\'' | '0' => {},
+               _ => return None
+            }
+            chars += 1;
+         },
+         '\'' => {
+            break i;
+         },
+         _ => {}
       }
       chars += 1;
    };
