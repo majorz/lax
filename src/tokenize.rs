@@ -59,7 +59,7 @@ pub struct Token {
    pub col: usize,
 }
 
-type SynMatch = Option<(Syn, usize)>;
+type SynMatch = Option<(Syn, usize, usize)>;
 type SynMatchFn = fn(input: &str) -> SynMatch;
 
 const KEYWORD_MAP: [(&'static str, Syn); 13] = [
@@ -95,7 +95,7 @@ macro_rules! exact {
       #[inline]
       fn $func(input: &str) -> SynMatch {
          if let Some(item_len) = consume_start(input, $string) {
-            Some(($token_type, item_len))
+            Some(($token_type, item_len, item_len))
          } else {
             None
          }
@@ -147,7 +147,7 @@ fn match_space(input: &str) -> SynMatch {
    if pos == 0 {
       return None;
    } else {
-      return Some((Syn::Space, pos));
+      return Some((Syn::Space, pos, pos));
    }
 }
 
@@ -162,8 +162,8 @@ fn match_symbol(input: &str) -> SynMatch {
       return None;
    }
 
-   if let Some((Syn::Ident, pos)) = match_ident(&input[1..]) {
-      Some((Syn::Symbol, pos + 1))
+   if let Some((Syn::Ident, pos, _)) = match_ident(&input[1..]) {
+      Some((Syn::Symbol, pos + 1, pos + 1))
    } else {
       None
    }
@@ -195,11 +195,11 @@ fn match_ident(input: &str) -> SynMatch {
 
    for &(keyword, keyword_ty) in KEYWORD_MAP.iter() {
       if keyword == &input[..pos] {
-         return Some((keyword_ty, pos));
+         return Some((keyword_ty, pos, pos));
       }
    }
 
-   Some((Syn::Ident, pos))
+   Some((Syn::Ident, pos, pos))
 }
 
 fn match_digits(input: &str) -> SynMatch {
@@ -214,7 +214,7 @@ fn match_digits(input: &str) -> SynMatch {
    }
 
    if pos != 0 {
-      Some((Syn::Digits, pos))
+      Some((Syn::Digits, pos, pos))
    } else {
       None
    }
@@ -228,6 +228,7 @@ fn match_accent(input: &str) -> SynMatch {
    }
 
    let mut indices = input[1..].char_indices();
+   let mut chars = 0;
 
    let bytes = loop {
       if let Some((i, ch)) = indices.next() {
@@ -237,10 +238,11 @@ fn match_accent(input: &str) -> SynMatch {
       } else {
          break input.len() - 1;
       }
+      chars += 1;
    };
 
    if bytes != 0 {
-      Some((Syn::Accent, bytes + 1))
+      Some((Syn::Accent, bytes + 1, chars + 1))
    } else {
       None
    }
@@ -254,6 +256,7 @@ fn match_string(input: &str) -> SynMatch {
    }
 
    let mut indices = input[1..].char_indices();
+   let mut chars = 0;
 
    let pos = loop {
       if let Some((i, ch)) = indices.next() {
@@ -267,6 +270,7 @@ fn match_string(input: &str) -> SynMatch {
                } else {
                   return None;
                }
+               chars += 1;
             },
             '\'' => {
                break i;
@@ -276,9 +280,10 @@ fn match_string(input: &str) -> SynMatch {
       } else {
          return None;
       }
+      chars += 1;
    };
 
-   Some((Syn::String, pos + 2))
+   Some((Syn::String, pos + 2, chars + 2))
 }
 
 const MATCH_FNS: [SynMatchFn; 35] = [
@@ -327,7 +332,7 @@ pub fn tokenize(input: &str) -> Vec<Token> {
    let mut col = 1;
 
    while pos < input.len() {
-      if let Some((syn, span)) = match_token(&input[pos..]) {
+      if let Some((syn, span, chars)) = match_token(&input[pos..]) {
          tokens.push(
             Token {
                syn,
@@ -344,7 +349,7 @@ pub fn tokenize(input: &str) -> Vec<Token> {
          }
 
          pos += span;
-         col += span;
+         col += chars;
       } else {
          panic!("Unrecognized token at line: {}, col: {}", line, col);
       }
@@ -355,8 +360,8 @@ pub fn tokenize(input: &str) -> Vec<Token> {
 
 fn match_token(input: &str) -> SynMatch {
    for matcher in MATCH_FNS.iter() {
-      if let Some((syn, span)) = matcher(input) {
-         return Some((syn, span));
+      if let Some((syn, span, chars)) = matcher(input) {
+         return Some((syn, span, chars));
       }
    }
 
@@ -373,7 +378,11 @@ mod tests {
       );
 
       ($matcher:ident, $input:expr, $syn:expr, $span:expr) => (
-         assert_eq!($matcher($input), Some(($syn, $span)));
+         assert_eq!($matcher($input), Some(($syn, $span, $span)));
+      );
+
+      ($matcher:ident, $input:expr, $syn:expr, $span:expr, $chars:expr) => (
+         assert_eq!($matcher($input), Some(($syn, $span, $chars)));
       );
    }
 
@@ -509,9 +518,9 @@ mod tests {
       m!(match_accent, "-");
       m!(match_accent, "`");
       m!(match_accent, "`a", Syn::Accent, 2);
-      m!(match_accent, "`Я", Syn::Accent, 3);
-      m!(match_accent, "`y̆", Syn::Accent, 4);
-      m!(match_accent, "`ЯaЯaЯ ", Syn::Accent, 9);
+      m!(match_accent, "`Я", Syn::Accent, 3, 2);
+      m!(match_accent, "`y̆", Syn::Accent, 4, 3);
+      m!(match_accent, "`ЯaЯaЯ ", Syn::Accent, 9, 6);
       m!(match_accent, "````", Syn::Accent, 4);
       m!(match_accent, "````\n", Syn::Accent, 4);
       m!(match_accent, "````\r\n", Syn::Accent, 4);
@@ -542,9 +551,9 @@ mod tests {
       m!(match_string, "'aaa\\\"bbb'");
       m!(match_string, "''", Syn::String, 2);
       m!(match_string, "'a'", Syn::String, 3);
-      m!(match_string, "'Я'", Syn::String, 4);
-      m!(match_string, "'y̆'", Syn::String, 5);
-      m!(match_string, "'ЯaЯaЯ'", Syn::String, 10);
+      m!(match_string, "'Я'", Syn::String, 4, 3);
+      m!(match_string, "'y̆'", Syn::String, 5, 4);
+      m!(match_string, "'ЯaЯaЯ'", Syn::String, 10, 7);
       m!(match_string, "'''", Syn::String, 2);
       m!(match_string, "'aaa bbb'", Syn::String, 9);
       m!(match_string, "'aaa bbb' ", Syn::String, 9);
