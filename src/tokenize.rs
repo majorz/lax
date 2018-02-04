@@ -106,12 +106,11 @@ impl<'s> StrPeeker<'s> {
       self.peek.len() >= span
    }
 
-   fn exact(&mut self, front: &'static str) -> Option<usize> {
+   fn exact(&mut self, front: &'static str) -> Option<()> {
       let span = front.len();
       if self.peek.len() >= span && &self.peek[..span] == front {
          self.peek = &self.peek[span..];
-         self.input = self.peek;
-         Some(span)
+         Some(())
       } else {
          self.peek = self.input;
          None
@@ -343,7 +342,8 @@ macro_rules! exact {
    ($string:expr, $func:ident, $token_type:expr) => {
       fn $func(peeker: &mut StrPeeker) -> SynMatch {
          debug_assert!(peeker.has_more());
-         let span = peeker.exact($string)?;
+         peeker.exact($string)?;
+         let span = peeker.commit();
          Some(($token_type, span, span))
       }
    }
