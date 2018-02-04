@@ -77,241 +77,343 @@ pub struct Token {
 
 type SynMatch = Option<(Syn, usize, usize)>;
 
-#[inline]
-fn consume_start(input: &str, item: &'static str) -> Option<usize> {
-   debug_assert!(!input.is_empty());
+pub struct StrPeeker<'s> {
+   input: &'s str,
+   peek: &'s str,
+}
 
-   let item_len = item.len();
-   if input.len() >= item_len && &input[..item_len] == item {
-      Some(item_len)
+impl<'s> StrPeeker<'s> {
+   fn new(input: &'s str) -> Self {
+      StrPeeker {
+         input: input,
+         peek: input,
+      }
+   }
+
+   fn commit(&mut self) -> usize {
+      debug_assert!(self.peek.len() != self.input.len());
+
+      let span = self.input.len() - self.peek.len();
+      self.input = self.peek;
+      span
+   }
+
+   fn has_more(&mut self) -> bool {
+      self.peek.len() > 0
+   }
+
+   fn has_at_least(&mut self, span: usize) -> bool {
+      self.peek.len() >= span
+   }
+
+   fn exact(&mut self, front: &'static str) -> Option<usize> {
+      let span = front.len();
+      if self.peek.len() >= span && &self.peek[..span] == front {
+         self.peek = &self.peek[span..];
+         self.input = self.peek;
+         Some(span)
+      } else {
+         self.peek = self.input;
+         None
+      }
+   }
+
+   fn require(&mut self, f: fn(b: u8) -> bool) -> Option<()> {
+      if self.peek.is_empty() {
+         self.peek = self.input;
+      }
+
+      let byte = self.peek.as_bytes()[0];
+      if f(byte) {
+         self.peek = &self.peek[1..];
+         Some(())
+      } else {
+         self.peek = self.input;
+         None
+      }
+   }
+
+   fn multiple(&mut self, f: fn(b: u8) -> bool) -> Option<()> {
+      let mut span = 0;
+      for byte in self.peek.as_bytes() {
+         if !f(*byte) {
+            break;
+         }
+         span += 1;
+      };
+
+      if span > 0 {
+         self.peek = &self.peek[span..];
+         Some(())
+      } else {
+         self.peek = self.input;
+         None
+      }
+   }
+
+   fn any(&mut self, f: fn(b: u8) -> bool) {
+      let mut span = 0;
+      for byte in self.peek.as_bytes() {
+         if !f(*byte) {
+            break;
+         }
+         span += 1;
+      };
+
+      self.peek = &self.peek[span..];
+   }
+
+   fn char_advancer<'p>(&'p mut self) -> CharAdvancer<'p, 's> {
+      CharAdvancer::new(self)
+   }
+
+   fn reveal<'p>(&'p self) -> &'s str {
+      &self.input[..self.input.len() - self.peek.len()]
+   }
+
+   fn char_indices<'p>(&'p self) -> ::std::str::CharIndices<'s> {
+      self.peek.char_indices()
+   }
+
+   fn reset(&mut self) {
+      self.peek = self.input;
+   }
+
+   fn advance(&mut self, delta: usize) {
+      self.peek = &self.peek[delta..];
+   }
+}
+
+pub struct CharAdvancer<'p, 's: 'p> {
+   peeker: &'p mut StrPeeker<'s>,
+   indices: ::std::str::CharIndices<'s>,
+   end: usize,
+   chars: usize,
+}
+
+impl<'p, 's> CharAdvancer<'p, 's> {
+   fn new(peeker: &'p mut StrPeeker<'s>) -> Self {
+      let indices = peeker.char_indices();
+      CharAdvancer {
+         peeker: peeker,
+         indices: indices,
+         end: 0,
+         chars: 0,
+      }
+   }
+
+   fn next(&mut self) -> Option<char> {
+      if let Some((pos, ch)) = self.indices.next() {
+         self.end = pos + 1;
+         self.chars += 1;
+         Some(ch)
+      } else {
+         self.peeker.reset();
+         None
+      }
+   }
+
+   fn require(&mut self, f: fn(ch: char) -> bool) -> Option<()> {
+      if let Some((pos, ch)) = self.indices.next() {
+         if f(ch) {
+            self.end = pos + 1;
+            self.chars += 1;
+            return Some(());
+         }
+      }
+
+      self.peeker.reset();
+      None
+   }
+
+   fn commit(&mut self) -> usize {
+      self.peeker.advance(self.end);
+      let chars = self.chars;
+      self.end = 0;
+      self.chars = 0;
+      chars
+   }
+}
+
+fn space(peeker: &mut StrPeeker) -> SynMatch {
+   peeker.multiple(|b| b == b' ')?;
+
+   let span = peeker.commit();
+   Some((Syn::Space, span, span))
+}
+
+fn string(peeker: &mut StrPeeker) -> SynMatch {
+   debug_assert!(peeker.has_more());
+
+   peeker.require(|b| b == b'\'')?;
+
+   let chars = {
+      let mut advancer = peeker.char_advancer();
+      loop {
+         match advancer.next()? {
+            '\\' => {
+               advancer.require(
+                  |c| {
+                     c == 'n' || c == '\'' || c == '\\' ||
+                     c == 'r' || c == 't' || c == '0'
+                  }
+               )?;
+            },
+            '\'' => {
+               break;
+            },
+            _ => {}
+         }
+      }
+      advancer.commit()
+   };
+
+   let span = peeker.commit();
+   Some((Syn::String, span, chars + 1))
+}
+
+fn symbol(peeker: &mut StrPeeker) -> SynMatch {
+   debug_assert!(peeker.has_more());
+
+   if !peeker.has_at_least(2) {
+      return None;
+   }
+
+   peeker.require(|b| b == b'^')?;
+
+   advance_ident(peeker)?;
+
+   if Syn::Ident == syn_from_ident(&peeker.reveal()[1..]) {
+      let span = peeker.commit();
+      Some((Syn::Symbol, span, span))
    } else {
       None
    }
+}
+
+fn ident(peeker: &mut StrPeeker) -> SynMatch {
+   debug_assert!(peeker.has_more());
+
+   advance_ident(peeker)?;
+
+   let syn = syn_from_ident(peeker.reveal());
+   let span = peeker.commit();
+   Some((syn, span, span))
+}
+
+fn advance_ident(peeker: &mut StrPeeker) -> Option<()> {
+   peeker.require(
+      |b| {
+         (b >= b'a' && b <= b'z') ||
+         (b >= b'A' && b <= b'Z') ||
+         b == b'_'
+      }
+   )?;
+
+   peeker.any(
+      |b| {
+         (b >= b'a' && b <= b'z') ||
+         (b >= b'A' && b <= b'Z') ||
+         (b >= b'0' && b <= b'9') ||
+         b == b'_'
+      }
+   );
+
+   Some(())
+}
+
+fn syn_from_ident(ident: &str) -> Syn {
+   for &(keyword, syn) in KEYWORDS.iter() {
+      if keyword == ident {
+         return syn;
+      }
+   }
+
+   Syn::Ident
+}
+
+fn digits(peeker: &mut StrPeeker) -> SynMatch {
+   peeker.multiple(|b| b >= b'0' && b <= b'9')?;
+
+   let span = peeker.commit();
+   Some((Syn::Digits, span, span))
 }
 
 macro_rules! exact {
    ($string:expr, $func:ident, $token_type:expr) => {
-      #[inline]
-      fn $func(input: &str) -> SynMatch {
-         let item_len = consume_start(input, $string)?;
-         Some(($token_type, item_len, item_len))
+      fn $func(peeker: &mut StrPeeker) -> SynMatch {
+         debug_assert!(peeker.has_more());
+         let span = peeker.exact($string)?;
+         Some(($token_type, span, span))
       }
    }
 }
 
-exact!("\n", match_new_line_n, Syn::NewLine);
-exact!("\r\n", match_new_line_rn, Syn::NewLine);
-exact!("\r", match_new_line_r, Syn::NewLine);
-exact!("**", match_power, Syn::Power);
-exact!("==", match_equal, Syn::Equal);
-exact!("!=", match_unequal, Syn::Unequal);
-exact!("<=", match_less_equal, Syn::LessEqual);
-exact!(">=", match_greater_equal, Syn::GreaterEqual);
-exact!("+=", match_add_assign, Syn::AddAssign);
-exact!("-=", match_subtract_assign, Syn::SubtractAssign);
-exact!("*=", match_multiply_assign, Syn::MultiplyAssign);
-exact!("/=", match_divide_assign, Syn::DivideAssign);
-exact!("..", match_range, Syn::Range);
-exact!(".", match_dot, Syn::Dot);
-exact!("=", match_assign, Syn::Assign);
-exact!("+", match_add, Syn::Add);
-exact!("-", match_subtract, Syn::Subtract);
-exact!("*", match_multiply, Syn::Multiply);
-exact!("/", match_divide, Syn::Divide);
-exact!("|", match_bar, Syn::Bar);
-exact!(":", match_colon, Syn::Colon);
-exact!("(", match_paren_left, Syn::ParenLeft);
-exact!(")", match_paren_right, Syn::ParenRight);
-exact!("[", match_bracket_left, Syn::BracketLeft);
-exact!("]", match_bracket_right, Syn::BracketRight);
-exact!("<", match_angle_left, Syn::AngleLeft);
-exact!(">", match_angle_right, Syn::AngleRight);
-exact!("{", match_curly_left, Syn::CurlyLeft);
-exact!("}", match_curly_right, Syn::CurlyRight);
+exact!("\n", new_line_n, Syn::NewLine);
+exact!("\r\n", new_line_rn, Syn::NewLine);
+exact!("\r", new_line_r, Syn::NewLine);
+exact!("**", power, Syn::Power);
+exact!("==", equal, Syn::Equal);
+exact!("!=", unequal, Syn::Unequal);
+exact!("<=", less_equal, Syn::LessEqual);
+exact!(">=", greater_equal, Syn::GreaterEqual);
+exact!("+=", add_assign, Syn::AddAssign);
+exact!("-=", subtract_assign, Syn::SubtractAssign);
+exact!("*=", multiply_assign, Syn::MultiplyAssign);
+exact!("/=", divide_assign, Syn::DivideAssign);
+exact!("..", range, Syn::Range);
+exact!(".", dot, Syn::Dot);
+exact!("=", assign, Syn::Assign);
+exact!("+", add, Syn::Add);
+exact!("-", subtract, Syn::Subtract);
+exact!("*", multiply, Syn::Multiply);
+exact!("/", divide, Syn::Divide);
+exact!("|", bar, Syn::Bar);
+exact!(":", colon, Syn::Colon);
+exact!("(", paren_left, Syn::ParenLeft);
+exact!(")", paren_right, Syn::ParenRight);
+exact!("[", bracket_left, Syn::BracketLeft);
+exact!("]", bracket_right, Syn::BracketRight);
+exact!("<", angle_left, Syn::AngleLeft);
+exact!(">", angle_right, Syn::AngleRight);
+exact!("{", curly_left, Syn::CurlyLeft);
+exact!("}", curly_right, Syn::CurlyRight);
 
-fn match_space(input: &str) -> SynMatch {
-   let mut pos = 0;
-
-   for c in input.bytes() {
-      if c == b' ' {
-         pos += 1;
-      } else {
-         break;
-      }
-   }
-
-   if pos == 0 {
-      return None;
-   } else {
-      return Some((Syn::Space, pos, pos));
-   }
-}
-
-fn match_symbol(input: &str) -> SynMatch {
-   debug_assert!(!input.is_empty());
-
-   if input.len() == 1 {
-      return None;
-   }
-
-   if input.as_bytes()[0] != b'^' {
-      return None;
-   }
-
-   if let Some((Syn::Ident, pos, _)) = match_ident(&input[1..]) {
-      Some((Syn::Symbol, pos + 1, pos + 1))
-   } else {
-      None
-   }
-}
-
-fn match_ident(input: &str) -> SynMatch {
-   debug_assert!(!input.is_empty());
-
-   let c = input.as_bytes()[0];
-   if !(
-      (c >= b'a' && c <= b'z') ||
-      (c >= b'A' && c <= b'Z') ||
-      c == b'_') {
-      return None;
-   }
-
-   let mut pos = 1;
-
-   for c in input[1..].as_bytes() {
-      if (*c >= b'a' && *c <= b'z') ||
-         (*c >= b'A' && *c <= b'Z') ||
-         (*c >= b'0' && *c <= b'9') ||
-         *c == b'_' {
-         pos += 1;
-      } else {
-         break;
-      }
-   }
-
-   for &(keyword, keyword_ty) in KEYWORDS.iter() {
-      if keyword == &input[..pos] {
-         return Some((keyword_ty, pos, pos));
-      }
-   }
-
-   Some((Syn::Ident, pos, pos))
-}
-
-fn match_digits(input: &str) -> SynMatch {
-   let mut pos = 0;
-
-   for c in input.as_bytes() {
-      if *c >= b'0' && *c <= b'9' {
-         pos += 1;
-      } else {
-         break;
-      }
-   }
-
-   if pos != 0 {
-      Some((Syn::Digits, pos, pos))
-   } else {
-      None
-   }
-}
-
-fn match_accent(input: &str) -> SynMatch {
-   debug_assert!(!input.is_empty());
-
-   if input.as_bytes()[0] != b'`' {
-      return None;
-   }
-
-   let mut indices = input[1..].char_indices();
-   let mut chars = 0;
-
-   let bytes = loop {
-      if let Some((i, ch)) = indices.next() {
-         if ch == ' ' || ch == '\n' || ch == '\r' || ch == ')' {
-            break i;
-         }
-      } else {
-         break input.len() - 1;
-      }
-      chars += 1;
-   };
-
-   if bytes != 0 {
-      Some((Syn::Accent, bytes + 1, chars + 1))
-   } else {
-      None
-   }
-}
-
-fn match_string(input: &str) -> SynMatch {
-   debug_assert!(!input.is_empty());
-
-   if input.as_bytes()[0] != b'\'' {
-      return None;
-   }
-
-   let mut indices = input[1..].char_indices();
-   let mut chars = 0;
-
-   let pos = loop {
-      let (i, ch) = indices.next()?;
-      match ch {
-         '\\' => {
-            let (_, ch) = indices.next()?;
-            match ch {
-               'n' | 'r' | 't' | '\\' | '\'' | '0' => {},
-               _ => return None
-            }
-            chars += 1;
-         },
-         '\'' => {
-            break i;
-         },
-         _ => {}
-      }
-      chars += 1;
-   };
-
-   Some((Syn::String, pos + 2, chars + 2))
-}
-
-const MATCH_FNS: [fn(input: &str) -> SynMatch; 35] = [
-   match_space,
-   match_new_line_n,
-   match_new_line_rn,
-   match_new_line_r,
-   match_power,
-   match_equal,
-   match_unequal,
-   match_less_equal,
-   match_greater_equal,
-   match_add_assign,
-   match_subtract_assign,
-   match_multiply_assign,
-   match_divide_assign,
-   match_range,
-   match_assign,
-   match_add,
-   match_subtract,
-   match_multiply,
-   match_divide,
-   match_bar,
-   match_colon,
-   match_paren_left,
-   match_paren_right,
-   match_bracket_left,
-   match_bracket_right,
-   match_angle_left,
-   match_angle_right,
-   match_curly_left,
-   match_curly_right,
-   match_ident,
-   match_digits,
-   match_dot,
-   match_symbol,
-   match_accent,
-   match_string,
+const MATCHERS: [fn(peeker: &mut StrPeeker) -> SynMatch; 34] = [
+   space,
+   new_line_n,
+   new_line_rn,
+   new_line_r,
+   power,
+   equal,
+   unequal,
+   less_equal,
+   greater_equal,
+   add_assign,
+   subtract_assign,
+   multiply_assign,
+   divide_assign,
+   range,
+   assign,
+   add,
+   subtract,
+   multiply,
+   divide,
+   bar,
+   colon,
+   paren_left,
+   paren_right,
+   bracket_left,
+   bracket_right,
+   angle_left,
+   angle_right,
+   curly_left,
+   curly_right,
+   ident,
+   digits,
+   dot,
+   symbol,
+   string,
 ];
 
 pub fn tokenize(input: &str) -> Vec<Token> {
@@ -321,8 +423,10 @@ pub fn tokenize(input: &str) -> Vec<Token> {
    let mut line = 1;
    let mut col = 1;
 
+   let mut peeker = StrPeeker::new(input);
+
    while pos < input.len() {
-      if let Some((syn, span, chars)) = match_token(&input[pos..]) {
+      if let Some((syn, span, chars)) = match_syn(&mut peeker) {
          tokens.push(
             Token {
                syn,
@@ -348,9 +452,9 @@ pub fn tokenize(input: &str) -> Vec<Token> {
    tokens
 }
 
-fn match_token(input: &str) -> SynMatch {
-   for matcher in MATCH_FNS.iter() {
-      if let Some((syn, span, chars)) = matcher(input) {
+fn match_syn(peeker: &mut StrPeeker) -> SynMatch {
+   for matcher in MATCHERS.iter() {
+      if let Some((syn, span, chars)) = matcher(peeker) {
          return Some((syn, span, chars));
       }
    }
@@ -364,208 +468,182 @@ mod tests {
 
    macro_rules! m {
       ($matcher:ident, $input:expr) => (
-         assert_eq!($matcher($input), None);
+         let mut peeker = StrPeeker::new($input);
+         assert_eq!($matcher(&mut peeker), None);
       );
 
       ($matcher:ident, $input:expr, $syn:expr, $span:expr) => (
-         assert_eq!($matcher($input), Some(($syn, $span, $span)));
+         let mut peeker = StrPeeker::new($input);
+         assert_eq!($matcher(&mut peeker), Some(($syn, $span, $span)));
       );
 
       ($matcher:ident, $input:expr, $syn:expr, $span:expr, $chars:expr) => (
-         assert_eq!($matcher($input), Some(($syn, $span, $chars)));
+         let mut peeker = StrPeeker::new($input);
+         assert_eq!($matcher(&mut peeker), Some(($syn, $span, $chars)));
       );
    }
 
+   #[cfg(debug_assertions)]
+   macro_rules! e {
+      ($matcher:ident) => (
+         $matcher(&mut StrPeeker::new(""));
+      )
+   }
+
    #[test]
-   fn consume_start_some() {
-      assert_eq!(consume_start("brea", "break"), None);
-      assert_eq!(consume_start("bbreak", "break"), None);
-      assert_eq!(consume_start("break", "break"), Some(5));
-      assert_eq!(consume_start("breakb", "break"), Some(5));
-      assert_eq!(consume_start("breakЯ", "break"), Some(5));
+   fn test_exact() {
+      m!(power, "*");
+      m!(power, "-**");
+      m!(multiply, "*", Syn::Multiply, 1);
+      m!(power, "**", Syn::Power, 2);
+      m!(power, "****", Syn::Power, 2);
+      m!(new_line_n, "\n\n", Syn::NewLine, 1);
+      m!(new_line_rn, "\r\n", Syn::NewLine, 2);
+      m!(new_line_r, "\r\r", Syn::NewLine, 1);
    }
 
    #[test]
    #[should_panic]
    #[cfg(debug_assertions)]
-   fn consume_start_empty() {
-      consume_start("", "break");
+   fn test_exact_empty() {
+      e!(power);
+      e!(multiply);
    }
 
    #[test]
-   fn exact() {
-      m!(match_power, "*");
-      m!(match_power, "-**");
-      m!(match_power, "**", Syn::Power, 2);
-      m!(match_power, "****", Syn::Power, 2);
+   fn test_space() {
+      m!(space, "");
+      m!(space, "-");
+      m!(space, "- ");
+      m!(space, " ", Syn::Space, 1);
+      m!(space, " -", Syn::Space, 1);
+      m!(space, "   ", Syn::Space, 3);
+      m!(space, "   -", Syn::Space, 3);
    }
 
    #[test]
-   #[should_panic]
-   #[cfg(debug_assertions)]
-   fn exact_empty() {
-      match_power("");
-   }
-
-   #[test]
-   fn space() {
-      m!(match_space, "");
-      m!(match_space, "-");
-      m!(match_space, "- ");
-      m!(match_space, " ", Syn::Space, 1);
-      m!(match_space, " -", Syn::Space, 1);
-      m!(match_space, "   ", Syn::Space, 3);
-      m!(match_space, "   -", Syn::Space, 3);
-   }
-
-   #[test]
-   fn symbol() {
-      m!(match_symbol, "-");
-      m!(match_symbol, "-^name");
-      m!(match_symbol, "^012abc");
-      m!(match_symbol, "^");
-      m!(match_symbol, "^-");
-      m!(match_symbol, "^Я");
-      m!(match_symbol, "^for");
-      m!(match_symbol, "^_", Syn::Symbol, 2);
-      m!(match_symbol, "^__", Syn::Symbol, 3);
-      m!(match_symbol, "^_.", Syn::Symbol, 2);
-      m!(match_symbol, "^_name", Syn::Symbol, 6);
-      m!(match_symbol, "^name", Syn::Symbol, 5);
-      m!(match_symbol, "^_NAME.", Syn::Symbol, 6);
-      m!(match_symbol, "^NAME.", Syn::Symbol, 5);
-      m!(match_symbol, "^a100", Syn::Symbol, 5);
-      m!(match_symbol, "^a100.", Syn::Symbol, 5);
-      m!(match_symbol, "^a_a_a.", Syn::Symbol, 6);
-      m!(match_symbol, "^aЯ", Syn::Symbol, 2);
+   fn test_symbol() {
+      m!(symbol, "-");
+      m!(symbol, "-^name");
+      m!(symbol, "^012abc");
+      m!(symbol, "^");
+      m!(symbol, "^-");
+      m!(symbol, "^Я");
+      m!(symbol, "^for");
+      m!(symbol, "^_", Syn::Symbol, 2);
+      m!(symbol, "^__", Syn::Symbol, 3);
+      m!(symbol, "^_.", Syn::Symbol, 2);
+      m!(symbol, "^_name", Syn::Symbol, 6);
+      m!(symbol, "^name", Syn::Symbol, 5);
+      m!(symbol, "^_NAME.", Syn::Symbol, 6);
+      m!(symbol, "^NAME.", Syn::Symbol, 5);
+      m!(symbol, "^a100", Syn::Symbol, 5);
+      m!(symbol, "^a100.", Syn::Symbol, 5);
+      m!(symbol, "^a_a_a.", Syn::Symbol, 6);
+      m!(symbol, "^aЯ", Syn::Symbol, 2);
    }
 
    #[test]
    #[should_panic]
    #[cfg(debug_assertions)]
-   fn symbol_empty() {
-      match_symbol("");
+   fn test_symbol_empty() {
+      e!(symbol);
    }
 
    #[test]
-   fn ident() {
-      m!(match_ident, "-");
-      m!(match_ident, "-name");
-      m!(match_ident, "012abc");
-      m!(match_ident, "_", Syn::Ident, 1);
-      m!(match_ident, "__", Syn::Ident, 2);
-      m!(match_ident, "_.", Syn::Ident, 1);
-      m!(match_ident, "_name", Syn::Ident, 5);
-      m!(match_ident, "name", Syn::Ident, 4);
-      m!(match_ident, "_NAME.", Syn::Ident, 5);
-      m!(match_ident, "NAME.", Syn::Ident, 4);
-      m!(match_ident, "a100", Syn::Ident, 4);
-      m!(match_ident, "a100.", Syn::Ident, 4);
-      m!(match_ident, "a_a_a.", Syn::Ident, 5);
-      m!(match_ident, "aЯ", Syn::Ident, 1);
-   }
-
-   #[test]
-   #[should_panic]
-   #[cfg(debug_assertions)]
-   fn ident_empty() {
-      match_ident("");
-   }
-
-   #[test]
-   fn keyword() {
-      m!(match_ident, "fn", Syn::Fn, 2);
-      m!(match_ident, "loop", Syn::Loop, 4);
-      m!(match_ident, "match", Syn::Match, 5);
-      m!(match_ident, "if", Syn::If, 2);
-      m!(match_ident, "ef", Syn::Ef, 2);
-      m!(match_ident, "el", Syn::El, 2);
-      m!(match_ident, "break", Syn::Break, 5);
-      m!(match_ident, "ret", Syn::Ret, 3);
-      m!(match_ident, "for", Syn::For, 3);
-      m!(match_ident, "in", Syn::In, 2);
-      m!(match_ident, "and", Syn::And, 3);
-      m!(match_ident, "or", Syn::Or, 2);
-      m!(match_ident, "not", Syn::Not, 3);
-      m!(match_ident, "for", Syn::For, 3);
-      m!(match_ident, "break_", Syn::Ident, 6);
-      m!(match_ident, "ret100", Syn::Ident, 6);
-   }
-
-   #[test]
-   fn digits() {
-      m!(match_digits, "");
-      m!(match_digits, " 1");
-      m!(match_digits, "0", Syn::Digits, 1);
-      m!(match_digits, "1", Syn::Digits, 1);
-      m!(match_digits, "0000000000.", Syn::Digits, 10);
-      m!(match_digits, "0123456789.", Syn::Digits, 10);
-      m!(match_digits, "9876543210.", Syn::Digits, 10);
-   }
-
-   #[test]
-   fn accent() {
-      m!(match_accent, "-");
-      m!(match_accent, "`");
-      m!(match_accent, "`a", Syn::Accent, 2);
-      m!(match_accent, "`Я", Syn::Accent, 3, 2);
-      m!(match_accent, "`y̆", Syn::Accent, 4, 3);
-      m!(match_accent, "`ЯaЯaЯ ", Syn::Accent, 9, 6);
-      m!(match_accent, "````", Syn::Accent, 4);
-      m!(match_accent, "````\n", Syn::Accent, 4);
-      m!(match_accent, "````\r\n", Syn::Accent, 4);
-      m!(match_accent, "`abc) ", Syn::Accent, 4);
-      m!(match_accent, "`abc\n ", Syn::Accent, 4);
-      m!(match_accent, "`abc\r\n ", Syn::Accent, 4);
-      m!(match_accent, "`abc  ", Syn::Accent, 4);
-      m!(match_accent, "`abc\\) ", Syn::Accent, 5);
+   fn test_ident() {
+      m!(ident, "-");
+      m!(ident, "-name");
+      m!(ident, "012abc");
+      m!(ident, "_", Syn::Ident, 1);
+      m!(ident, "__", Syn::Ident, 2);
+      m!(ident, "_.", Syn::Ident, 1);
+      m!(ident, "_name", Syn::Ident, 5);
+      m!(ident, "name", Syn::Ident, 4);
+      m!(ident, "_NAME.", Syn::Ident, 5);
+      m!(ident, "NAME.", Syn::Ident, 4);
+      m!(ident, "a100", Syn::Ident, 4);
+      m!(ident, "a100.", Syn::Ident, 4);
+      m!(ident, "a_a_a.", Syn::Ident, 5);
+      m!(ident, "aЯ", Syn::Ident, 1);
    }
 
    #[test]
    #[should_panic]
    #[cfg(debug_assertions)]
-   fn accent_empty() {
-      match_accent("");
+   fn test_ident_empty() {
+      e!(ident);
    }
 
    #[test]
-   fn string() {
-      m!(match_string, "-");
-      m!(match_string, "-''");
-      m!(match_string, "'");
-      m!(match_string, "'a");
-      m!(match_string, "'ЯaЯaЯ");
-      m!(match_string, "'a\\'");
-      m!(match_string, "'a\\ '");
-      m!(match_string, "'aaa\\abbb'");
-      m!(match_string, "'aaa\\\"bbb'");
-      m!(match_string, "''", Syn::String, 2);
-      m!(match_string, "'a'", Syn::String, 3);
-      m!(match_string, "'Я'", Syn::String, 4, 3);
-      m!(match_string, "'y̆'", Syn::String, 5, 4);
-      m!(match_string, "'ЯaЯaЯ'", Syn::String, 10, 7);
-      m!(match_string, "'''", Syn::String, 2);
-      m!(match_string, "'aaa bbb'", Syn::String, 9);
-      m!(match_string, "'aaa bbb' ", Syn::String, 9);
-      m!(match_string, "'aaa bbb'ccc", Syn::String, 9);
-      m!(match_string, "'aaa\nbbb\nccc'", Syn::String, 13);
-      m!(match_string, "'aaa\nbbb\nccc'\n", Syn::String, 13);
-      m!(match_string, "'aaa\nbbb\nccc'", Syn::String, 13);
-      m!(match_string, "'aaa\r\nbbb\r\nccc'", Syn::String, 15);
-      m!(match_string, "'aaa\r\nbbb\r\nccc'\r\n", Syn::String, 15);
-      m!(match_string, "'aaa\r\nbbb\r\nccc'", Syn::String, 15);
-      m!(match_string, "'aaa\\nbbb'", Syn::String, 10);
-      m!(match_string, "'aaa\\rbbb'", Syn::String, 10);
-      m!(match_string, "'aaa\\tbbb'", Syn::String, 10);
-      m!(match_string, "'aaa\\\\bbb'", Syn::String, 10);
-      m!(match_string, "'aaa\\\'bbb'", Syn::String, 10);
-      m!(match_string, "'aaa\\0bbb'", Syn::String, 10);
+   fn test_keyword() {
+      m!(ident, "fn", Syn::Fn, 2);
+      m!(ident, "loop", Syn::Loop, 4);
+      m!(ident, "match", Syn::Match, 5);
+      m!(ident, "if", Syn::If, 2);
+      m!(ident, "ef", Syn::Ef, 2);
+      m!(ident, "el", Syn::El, 2);
+      m!(ident, "break", Syn::Break, 5);
+      m!(ident, "ret", Syn::Ret, 3);
+      m!(ident, "for", Syn::For, 3);
+      m!(ident, "in", Syn::In, 2);
+      m!(ident, "and", Syn::And, 3);
+      m!(ident, "or", Syn::Or, 2);
+      m!(ident, "not", Syn::Not, 3);
+      m!(ident, "for", Syn::For, 3);
+      m!(ident, "break_", Syn::Ident, 6);
+      m!(ident, "ret100", Syn::Ident, 6);
+   }
+
+   #[test]
+   fn test_digits() {
+      m!(digits, "");
+      m!(digits, " 1");
+      m!(digits, "0", Syn::Digits, 1);
+      m!(digits, "1", Syn::Digits, 1);
+      m!(digits, "0000000000.", Syn::Digits, 10);
+      m!(digits, "0123456789.", Syn::Digits, 10);
+      m!(digits, "9876543210.", Syn::Digits, 10);
+   }
+
+   #[test]
+   fn test_string() {
+      m!(string, "-");
+      m!(string, "-''");
+      m!(string, "'");
+      m!(string, "'a");
+      m!(string, "'ЯaЯaЯ");
+      m!(string, "'a\\'");
+      m!(string, "'a\\ '");
+      m!(string, "'aaa\\abbb'");
+      m!(string, "'aaa\\\"bbb'");
+      m!(string, "''", Syn::String, 2);
+      m!(string, "'a'", Syn::String, 3);
+      m!(string, "'Я'", Syn::String, 4, 3);
+      m!(string, "'y̆'", Syn::String, 5, 4);
+      m!(string, "'ЯaЯaЯ'", Syn::String, 10, 7);
+      m!(string, "'''", Syn::String, 2);
+      m!(string, "'aaa bbb'", Syn::String, 9);
+      m!(string, "'aaa bbb' ", Syn::String, 9);
+      m!(string, "'aaa bbb'ccc", Syn::String, 9);
+      m!(string, "'aaa\nbbb\nccc'", Syn::String, 13);
+      m!(string, "'aaa\nbbb\nccc'\n", Syn::String, 13);
+      m!(string, "'aaa\nbbb\nccc'", Syn::String, 13);
+      m!(string, "'aaa\r\nbbb\r\nccc'", Syn::String, 15);
+      m!(string, "'aaa\r\nbbb\r\nccc'\r\n", Syn::String, 15);
+      m!(string, "'aaa\r\nbbb\r\nccc'", Syn::String, 15);
+      m!(string, "'aaa\\nbbb'", Syn::String, 10);
+      m!(string, "'aaa\\rbbb'", Syn::String, 10);
+      m!(string, "'aaa\\tbbb'", Syn::String, 10);
+      m!(string, "'aaa\\\\bbb'", Syn::String, 10);
+      m!(string, "'aaa\\\'bbb'", Syn::String, 10);
+      m!(string, "'aaa\\0bbb'", Syn::String, 10);
    }
 
    #[test]
    #[should_panic]
    #[cfg(debug_assertions)]
-   fn string_empty() {
-      match_string("");
+   fn test_string_empty() {
+      e!(string);
    }
 }

@@ -39,35 +39,38 @@ fn tokenize(input)
 fn match_token(input)
    map = {
       space() : ^space
-      `\n     : ^new_line
 
-      `** : ^power
-      `== : ^equal
-      `!= : ^unequal
-      `<= : ^less_equal
-      `>= : ^greater_equal
-      `+= : ^add_assign
-      `-= : ^subtract_assign
-      `*= : ^multiply_assign
-      `/= : ^divide_assign
-      `.. : ^range
+      '\n'    : ^new_line
+      '\r\n'  : ^new_line
+      '\r'    : ^new_line
 
-      `.  : ^dot
-      `^  : ^caret
-      `=  : ^assign
-      `+  : ^add
-      `-  : ^subtract
-      `*  : ^multiply
-      `/  : ^divide
-      `|  : ^bar
-      `(  : ^paren_right
-      `\) : ^paren_left
-      `[  : ^bracket_left
-      `]  : ^bracket_right
-      `<  : ^angle_left
-      `>  : ^angle_right
-      `{  : ^curly_right
-      `}  : ^curly_left
+      '**' : ^power
+      '==' : ^equal
+      '!=' : ^unequal
+      '<=' : ^less_equal
+      '>=' : ^greater_equal
+      '+=' : ^add_assign
+      '-=' : ^subtract_assign
+      '*=' : ^multiply_assign
+      '/=' : ^divide_assign
+      '..' : ^range
+
+      '.'  : ^dot
+      '^'  : ^caret
+      '='  : ^assign
+      '+'  : ^add
+      '-'  : ^subtract
+      '*'  : ^multiply
+      '/'  : ^divide
+      '|'  : ^bar
+      '('  : ^paren_right
+      ')' : ^paren_left
+      '['  : ^bracket_left
+      ']'  : ^bracket_right
+      '<'  : ^angle_left
+      '>'  : ^angle_right
+      '{'  : ^curly_right
+      '}'  : ^curly_left
 
       comment() : ^comment
       accent()  : ^accent
@@ -91,51 +94,39 @@ fn space()
 
 fn number()
    [
-      zero_one(`- or `+)
+      zero_one('-' or '+')
       zero_plus(digit())
-      zero_one(`.)
+      zero_one('.')
       one_plus(digit())
    ]
 
 fn ident()
    [
-      one_plus(`_ or alpha())
-      zero_plus(digit() or `_ or alpha())
+      one_plus('_' or alpha())
+      zero_plus(digit() or '_' or alpha())
    ]
 
 fn comment()
    [
-      `#
-      zero_plus(not `\n)
-   ]
-
-fn accent()
-   [
-      ``
-      one_plus(escape_pair() or not accent_terminator())
+      '#'
+      zero_plus(not '\n')
    ]
 
 fn string()
    [
-      `'
-      zero_plus(`\\' or not (`' or `\n))
-      `'
+      '\''
+      zero_plus('\\' or not ('\'' or '\n'))
+      '\''
    ]
 
-fn accent_terminator()
-   whitespace() or `\) or `\n
-
 fn escape_pair()
-   `\\ or escaped_char()
+   '\\' or escaped_char()
 
 fn escaped_char()
-   `\\ or `\) or `n or `r or `t or `f or `v
+   'n' or '\'' or '\\' or 'r' or 't' or '0'
 
 fn digit()
-   `0 .. `9
+   '0' .. '9'
 
 fn alpha()
-   `a .. `z or `A .. `Z
-
-fn whitespace()
-   `\n or `\r or `\t or `\f or `\v or ' '
+   'a' .. 'z' or 'A' .. 'Z'

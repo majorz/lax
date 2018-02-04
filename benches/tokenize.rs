@@ -9,9 +9,9 @@ use std::iter;
 use std::fs::File;
 use std::io::prelude::*;
 
-use nel::tokenize::tokenize;
+use nel::tokenize::*;
 
-fn regex_tokenize_benchmark(c: &mut Criterion) {
+fn tokenize_benchmark(c: &mut Criterion) {
    let mut f = File::open("nel/tokenize.nel")
       .expect("file not found");
 
@@ -19,7 +19,7 @@ fn regex_tokenize_benchmark(c: &mut Criterion) {
    f.read_to_string(&mut source)
       .expect("reading the file failed");
 
-   let min = 2usize.pow(18);
+   let min = 2usize.pow(12);
    let count = 1 + (min - 1) / source.len();
 
    assert!(count * source.len() >= min && (count - 1) * source.len() < min);
@@ -32,8 +32,8 @@ fn regex_tokenize_benchmark(c: &mut Criterion) {
    let lines = input.matches('\n').count();
    println!("{} lines/{} kb", lines, input.len() / 1024);
 
-   c.bench_function("regex tokenize", |b| b.iter(|| tokenize(&input)));
+   c.bench_function("tokenize", |b| b.iter(|| tokenize(&input)));
 }
 
-criterion_group!(benches, regex_tokenize_benchmark);
-criterion_main!(benches);
+criterion_group!(tokenize_group, tokenize_benchmark);
+criterion_main!(tokenize_group);
