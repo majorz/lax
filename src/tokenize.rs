@@ -2,8 +2,8 @@
 const INDENT: usize = 3;
 
 #[derive(Debug, Copy, Clone, PartialEq)]
-pub enum Syn {
-   Indentation,
+pub enum Tok {
+   Indent,
    NewLine,
    Power,
    Equal,
@@ -52,32 +52,32 @@ pub enum Syn {
    In,
 }
 
-const KEYWORDS: [(&'static str, Syn); 13] = [
-   ("fn",     Syn::Fn),
-   ("loop",   Syn::Loop),
-   ("match",  Syn::Match),
-   ("if",     Syn::If),
-   ("ef",     Syn::Ef),
-   ("el",     Syn::El),
-   ("break",  Syn::Break),
-   ("ret",    Syn::Ret),
-   ("for",    Syn::For),
-   ("in",     Syn::In),
-   ("and",    Syn::And),
-   ("or",     Syn::Or),
-   ("not",    Syn::Not),
+const KEYWORDS: [(&'static str, Tok); 13] = [
+   ("fn",     Tok::Fn),
+   ("loop",   Tok::Loop),
+   ("match",  Tok::Match),
+   ("if",     Tok::If),
+   ("ef",     Tok::Ef),
+   ("el",     Tok::El),
+   ("break",  Tok::Break),
+   ("ret",    Tok::Ret),
+   ("for",    Tok::For),
+   ("in",     Tok::In),
+   ("and",    Tok::And),
+   ("or",     Tok::Or),
+   ("not",    Tok::Not),
 ];
 
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub struct Token {
-   pub syn: Syn,
+   pub tok: Tok,
    pub span: usize,
    pub pos: usize,
    pub line: usize,
    pub col: usize,
 }
 
-type SynMatch = Option<(Syn, usize, usize)>;
+type TokMatch = Option<(Tok, usize, usize)>;
 
 pub struct StrPeeker<'s> {
    input: &'s str,
@@ -242,7 +242,7 @@ fn space(peeker: &mut StrPeeker) -> Option<usize> {
    Some(peeker.commit())
 }
 
-fn string(peeker: &mut StrPeeker) -> SynMatch {
+fn string(peeker: &mut StrPeeker) -> TokMatch {
    debug_assert!(peeker.has_more());
 
    peeker.require(|b| b == b'\'')?;
@@ -269,10 +269,10 @@ fn string(peeker: &mut StrPeeker) -> SynMatch {
    };
 
    let span = peeker.commit();
-   Some((Syn::String, span, chars + 1))
+   Some((Tok::String, span, chars + 1))
 }
 
-fn symbol(peeker: &mut StrPeeker) -> SynMatch {
+fn symbol(peeker: &mut StrPeeker) -> TokMatch {
    debug_assert!(peeker.has_more());
 
    if !peeker.has_at_least(2) {
@@ -283,22 +283,22 @@ fn symbol(peeker: &mut StrPeeker) -> SynMatch {
 
    advance_ident(peeker)?;
 
-   if Syn::Ident == syn_from_ident(&peeker.reveal()[1..]) {
+   if Tok::Ident == tok_from_ident(&peeker.reveal()[1..]) {
       let span = peeker.commit();
-      Some((Syn::Symbol, span, span))
+      Some((Tok::Symbol, span, span))
    } else {
       None
    }
 }
 
-fn ident(peeker: &mut StrPeeker) -> SynMatch {
+fn ident(peeker: &mut StrPeeker) -> TokMatch {
    debug_assert!(peeker.has_more());
 
    advance_ident(peeker)?;
 
-   let syn = syn_from_ident(peeker.reveal());
+   let tok = tok_from_ident(peeker.reveal());
    let span = peeker.commit();
-   Some((syn, span, span))
+   Some((tok, span, span))
 }
 
 fn advance_ident(peeker: &mut StrPeeker) -> Option<()> {
@@ -322,26 +322,26 @@ fn advance_ident(peeker: &mut StrPeeker) -> Option<()> {
    Some(())
 }
 
-fn syn_from_ident(ident: &str) -> Syn {
-   for &(keyword, syn) in KEYWORDS.iter() {
+fn tok_from_ident(ident: &str) -> Tok {
+   for &(keyword, tok) in KEYWORDS.iter() {
       if keyword == ident {
-         return syn;
+         return tok;
       }
    }
 
-   Syn::Ident
+   Tok::Ident
 }
 
-fn digits(peeker: &mut StrPeeker) -> SynMatch {
+fn digits(peeker: &mut StrPeeker) -> TokMatch {
    peeker.multiple(|b| b >= b'0' && b <= b'9')?;
 
    let span = peeker.commit();
-   Some((Syn::Digits, span, span))
+   Some((Tok::Digits, span, span))
 }
 
 macro_rules! exact {
    ($string:expr, $func:ident, $token_type:expr) => {
-      fn $func(peeker: &mut StrPeeker) -> SynMatch {
+      fn $func(peeker: &mut StrPeeker) -> TokMatch {
          debug_assert!(peeker.has_more());
          peeker.exact($string)?;
          let span = peeker.commit();
@@ -350,37 +350,37 @@ macro_rules! exact {
    }
 }
 
-exact!("\n", new_line_n, Syn::NewLine);
-exact!("\r\n", new_line_rn, Syn::NewLine);
-exact!("\r", new_line_r, Syn::NewLine);
-exact!("**", power, Syn::Power);
-exact!("==", equal, Syn::Equal);
-exact!("!=", unequal, Syn::Unequal);
-exact!("<=", less_equal, Syn::LessEqual);
-exact!(">=", greater_equal, Syn::GreaterEqual);
-exact!("+=", add_assign, Syn::AddAssign);
-exact!("-=", subtract_assign, Syn::SubtractAssign);
-exact!("*=", multiply_assign, Syn::MultiplyAssign);
-exact!("/=", divide_assign, Syn::DivideAssign);
-exact!("..", range, Syn::Range);
-exact!(".", dot, Syn::Dot);
-exact!("=", assign, Syn::Assign);
-exact!("+", add, Syn::Add);
-exact!("-", subtract, Syn::Subtract);
-exact!("*", multiply, Syn::Multiply);
-exact!("/", divide, Syn::Divide);
-exact!("|", bar, Syn::Bar);
-exact!(":", colon, Syn::Colon);
-exact!("(", paren_left, Syn::ParenLeft);
-exact!(")", paren_right, Syn::ParenRight);
-exact!("[", bracket_left, Syn::BracketLeft);
-exact!("]", bracket_right, Syn::BracketRight);
-exact!("<", angle_left, Syn::AngleLeft);
-exact!(">", angle_right, Syn::AngleRight);
-exact!("{", curly_left, Syn::CurlyLeft);
-exact!("}", curly_right, Syn::CurlyRight);
+exact!("\n", new_line_n, Tok::NewLine);
+exact!("\r\n", new_line_rn, Tok::NewLine);
+exact!("\r", new_line_r, Tok::NewLine);
+exact!("**", power, Tok::Power);
+exact!("==", equal, Tok::Equal);
+exact!("!=", unequal, Tok::Unequal);
+exact!("<=", less_equal, Tok::LessEqual);
+exact!(">=", greater_equal, Tok::GreaterEqual);
+exact!("+=", add_assign, Tok::AddAssign);
+exact!("-=", subtract_assign, Tok::SubtractAssign);
+exact!("*=", multiply_assign, Tok::MultiplyAssign);
+exact!("/=", divide_assign, Tok::DivideAssign);
+exact!("..", range, Tok::Range);
+exact!(".", dot, Tok::Dot);
+exact!("=", assign, Tok::Assign);
+exact!("+", add, Tok::Add);
+exact!("-", subtract, Tok::Subtract);
+exact!("*", multiply, Tok::Multiply);
+exact!("/", divide, Tok::Divide);
+exact!("|", bar, Tok::Bar);
+exact!(":", colon, Tok::Colon);
+exact!("(", paren_left, Tok::ParenLeft);
+exact!(")", paren_right, Tok::ParenRight);
+exact!("[", bracket_left, Tok::BracketLeft);
+exact!("]", bracket_right, Tok::BracketRight);
+exact!("<", angle_left, Tok::AngleLeft);
+exact!(">", angle_right, Tok::AngleRight);
+exact!("{", curly_left, Tok::CurlyLeft);
+exact!("}", curly_right, Tok::CurlyRight);
 
-const MATCHERS: [fn(peeker: &mut StrPeeker) -> SynMatch; 33] = [
+const MATCHERS: [fn(peeker: &mut StrPeeker) -> TokMatch; 33] = [
    new_line_n,
    new_line_rn,
    new_line_r,
@@ -437,7 +437,7 @@ pub fn tokenize(input: &str) -> Vec<Token> {
                col += INDENT;
                tokens.push(
                   Token {
-                     syn: Syn::Indentation,
+                     tok: Tok::Indent,
                      span: INDENT,
                      pos,
                      line,
@@ -451,10 +451,10 @@ pub fn tokenize(input: &str) -> Vec<Token> {
          }
       }
 
-      if let Some((syn, span, chars)) = match_syn(&mut peeker) {
+      if let Some((tok, span, chars)) = match_tok(&mut peeker) {
          tokens.push(
             Token {
-               syn,
+               tok,
                span,
                pos,
                line,
@@ -462,7 +462,7 @@ pub fn tokenize(input: &str) -> Vec<Token> {
             }
          );
 
-         after_new_line = syn == Syn::NewLine;
+         after_new_line = tok == Tok::NewLine;
          if after_new_line {
             line += 1;
             col = 1;
@@ -478,10 +478,10 @@ pub fn tokenize(input: &str) -> Vec<Token> {
    tokens
 }
 
-fn match_syn(peeker: &mut StrPeeker) -> SynMatch {
+fn match_tok(peeker: &mut StrPeeker) -> TokMatch {
    for matcher in MATCHERS.iter() {
-      if let Some((syn, span, chars)) = matcher(peeker) {
-         return Some((syn, span, chars));
+      if let Some((tok, span, chars)) = matcher(peeker) {
+         return Some((tok, span, chars));
       }
    }
 
@@ -498,14 +498,14 @@ mod tests {
          assert_eq!($matcher(&mut peeker), None);
       );
 
-      ($matcher:ident, $input:expr, $syn:expr, $span:expr) => (
+      ($matcher:ident, $input:expr, $tok:expr, $span:expr) => (
          let mut peeker = StrPeeker::new($input);
-         assert_eq!($matcher(&mut peeker), Some(($syn, $span, $span)));
+         assert_eq!($matcher(&mut peeker), Some(($tok, $span, $span)));
       );
 
-      ($matcher:ident, $input:expr, $syn:expr, $span:expr, $chars:expr) => (
+      ($matcher:ident, $input:expr, $tok:expr, $span:expr, $chars:expr) => (
          let mut peeker = StrPeeker::new($input);
-         assert_eq!($matcher(&mut peeker), Some(($syn, $span, $chars)));
+         assert_eq!($matcher(&mut peeker), Some(($tok, $span, $chars)));
       );
    }
 
@@ -532,12 +532,12 @@ mod tests {
    fn test_exact() {
       m!(power, "*");
       m!(power, "-**");
-      m!(multiply, "*", Syn::Multiply, 1);
-      m!(power, "**", Syn::Power, 2);
-      m!(power, "****", Syn::Power, 2);
-      m!(new_line_n, "\n\n", Syn::NewLine, 1);
-      m!(new_line_rn, "\r\n", Syn::NewLine, 2);
-      m!(new_line_r, "\r\r", Syn::NewLine, 1);
+      m!(multiply, "*", Tok::Multiply, 1);
+      m!(power, "**", Tok::Power, 2);
+      m!(power, "****", Tok::Power, 2);
+      m!(new_line_n, "\n\n", Tok::NewLine, 1);
+      m!(new_line_rn, "\r\n", Tok::NewLine, 2);
+      m!(new_line_r, "\r\r", Tok::NewLine, 1);
    }
 
    #[test]
@@ -568,17 +568,17 @@ mod tests {
       m!(symbol, "^-");
       m!(symbol, "^Я");
       m!(symbol, "^for");
-      m!(symbol, "^_", Syn::Symbol, 2);
-      m!(symbol, "^__", Syn::Symbol, 3);
-      m!(symbol, "^_.", Syn::Symbol, 2);
-      m!(symbol, "^_name", Syn::Symbol, 6);
-      m!(symbol, "^name", Syn::Symbol, 5);
-      m!(symbol, "^_NAME.", Syn::Symbol, 6);
-      m!(symbol, "^NAME.", Syn::Symbol, 5);
-      m!(symbol, "^a100", Syn::Symbol, 5);
-      m!(symbol, "^a100.", Syn::Symbol, 5);
-      m!(symbol, "^a_a_a.", Syn::Symbol, 6);
-      m!(symbol, "^aЯ", Syn::Symbol, 2);
+      m!(symbol, "^_", Tok::Symbol, 2);
+      m!(symbol, "^__", Tok::Symbol, 3);
+      m!(symbol, "^_.", Tok::Symbol, 2);
+      m!(symbol, "^_name", Tok::Symbol, 6);
+      m!(symbol, "^name", Tok::Symbol, 5);
+      m!(symbol, "^_NAME.", Tok::Symbol, 6);
+      m!(symbol, "^NAME.", Tok::Symbol, 5);
+      m!(symbol, "^a100", Tok::Symbol, 5);
+      m!(symbol, "^a100.", Tok::Symbol, 5);
+      m!(symbol, "^a_a_a.", Tok::Symbol, 6);
+      m!(symbol, "^aЯ", Tok::Symbol, 2);
    }
 
    #[test]
@@ -593,17 +593,17 @@ mod tests {
       m!(ident, "-");
       m!(ident, "-name");
       m!(ident, "012abc");
-      m!(ident, "_", Syn::Ident, 1);
-      m!(ident, "__", Syn::Ident, 2);
-      m!(ident, "_.", Syn::Ident, 1);
-      m!(ident, "_name", Syn::Ident, 5);
-      m!(ident, "name", Syn::Ident, 4);
-      m!(ident, "_NAME.", Syn::Ident, 5);
-      m!(ident, "NAME.", Syn::Ident, 4);
-      m!(ident, "a100", Syn::Ident, 4);
-      m!(ident, "a100.", Syn::Ident, 4);
-      m!(ident, "a_a_a.", Syn::Ident, 5);
-      m!(ident, "aЯ", Syn::Ident, 1);
+      m!(ident, "_", Tok::Ident, 1);
+      m!(ident, "__", Tok::Ident, 2);
+      m!(ident, "_.", Tok::Ident, 1);
+      m!(ident, "_name", Tok::Ident, 5);
+      m!(ident, "name", Tok::Ident, 4);
+      m!(ident, "_NAME.", Tok::Ident, 5);
+      m!(ident, "NAME.", Tok::Ident, 4);
+      m!(ident, "a100", Tok::Ident, 4);
+      m!(ident, "a100.", Tok::Ident, 4);
+      m!(ident, "a_a_a.", Tok::Ident, 5);
+      m!(ident, "aЯ", Tok::Ident, 1);
    }
 
    #[test]
@@ -615,33 +615,33 @@ mod tests {
 
    #[test]
    fn test_keyword() {
-      m!(ident, "fn", Syn::Fn, 2);
-      m!(ident, "loop", Syn::Loop, 4);
-      m!(ident, "match", Syn::Match, 5);
-      m!(ident, "if", Syn::If, 2);
-      m!(ident, "ef", Syn::Ef, 2);
-      m!(ident, "el", Syn::El, 2);
-      m!(ident, "break", Syn::Break, 5);
-      m!(ident, "ret", Syn::Ret, 3);
-      m!(ident, "for", Syn::For, 3);
-      m!(ident, "in", Syn::In, 2);
-      m!(ident, "and", Syn::And, 3);
-      m!(ident, "or", Syn::Or, 2);
-      m!(ident, "not", Syn::Not, 3);
-      m!(ident, "for", Syn::For, 3);
-      m!(ident, "break_", Syn::Ident, 6);
-      m!(ident, "ret100", Syn::Ident, 6);
+      m!(ident, "fn", Tok::Fn, 2);
+      m!(ident, "loop", Tok::Loop, 4);
+      m!(ident, "match", Tok::Match, 5);
+      m!(ident, "if", Tok::If, 2);
+      m!(ident, "ef", Tok::Ef, 2);
+      m!(ident, "el", Tok::El, 2);
+      m!(ident, "break", Tok::Break, 5);
+      m!(ident, "ret", Tok::Ret, 3);
+      m!(ident, "for", Tok::For, 3);
+      m!(ident, "in", Tok::In, 2);
+      m!(ident, "and", Tok::And, 3);
+      m!(ident, "or", Tok::Or, 2);
+      m!(ident, "not", Tok::Not, 3);
+      m!(ident, "for", Tok::For, 3);
+      m!(ident, "break_", Tok::Ident, 6);
+      m!(ident, "ret100", Tok::Ident, 6);
    }
 
    #[test]
    fn test_digits() {
       m!(digits, "");
       m!(digits, " 1");
-      m!(digits, "0", Syn::Digits, 1);
-      m!(digits, "1", Syn::Digits, 1);
-      m!(digits, "0000000000.", Syn::Digits, 10);
-      m!(digits, "0123456789.", Syn::Digits, 10);
-      m!(digits, "9876543210.", Syn::Digits, 10);
+      m!(digits, "0", Tok::Digits, 1);
+      m!(digits, "1", Tok::Digits, 1);
+      m!(digits, "0000000000.", Tok::Digits, 10);
+      m!(digits, "0123456789.", Tok::Digits, 10);
+      m!(digits, "9876543210.", Tok::Digits, 10);
    }
 
    #[test]
@@ -655,27 +655,27 @@ mod tests {
       m!(string, "'a\\ '");
       m!(string, "'aaa\\abbb'");
       m!(string, "'aaa\\\"bbb'");
-      m!(string, "''", Syn::String, 2);
-      m!(string, "'a'", Syn::String, 3);
-      m!(string, "'Я'", Syn::String, 4, 3);
-      m!(string, "'y̆'", Syn::String, 5, 4);
-      m!(string, "'ЯaЯaЯ'", Syn::String, 10, 7);
-      m!(string, "'''", Syn::String, 2);
-      m!(string, "'aaa bbb'", Syn::String, 9);
-      m!(string, "'aaa bbb' ", Syn::String, 9);
-      m!(string, "'aaa bbb'ccc", Syn::String, 9);
-      m!(string, "'aaa\nbbb\nccc'", Syn::String, 13);
-      m!(string, "'aaa\nbbb\nccc'\n", Syn::String, 13);
-      m!(string, "'aaa\nbbb\nccc'", Syn::String, 13);
-      m!(string, "'aaa\r\nbbb\r\nccc'", Syn::String, 15);
-      m!(string, "'aaa\r\nbbb\r\nccc'\r\n", Syn::String, 15);
-      m!(string, "'aaa\r\nbbb\r\nccc'", Syn::String, 15);
-      m!(string, "'aaa\\nbbb'", Syn::String, 10);
-      m!(string, "'aaa\\rbbb'", Syn::String, 10);
-      m!(string, "'aaa\\tbbb'", Syn::String, 10);
-      m!(string, "'aaa\\\\bbb'", Syn::String, 10);
-      m!(string, "'aaa\\\'bbb'", Syn::String, 10);
-      m!(string, "'aaa\\0bbb'", Syn::String, 10);
+      m!(string, "''", Tok::String, 2);
+      m!(string, "'a'", Tok::String, 3);
+      m!(string, "'Я'", Tok::String, 4, 3);
+      m!(string, "'y̆'", Tok::String, 5, 4);
+      m!(string, "'ЯaЯaЯ'", Tok::String, 10, 7);
+      m!(string, "'''", Tok::String, 2);
+      m!(string, "'aaa bbb'", Tok::String, 9);
+      m!(string, "'aaa bbb' ", Tok::String, 9);
+      m!(string, "'aaa bbb'ccc", Tok::String, 9);
+      m!(string, "'aaa\nbbb\nccc'", Tok::String, 13);
+      m!(string, "'aaa\nbbb\nccc'\n", Tok::String, 13);
+      m!(string, "'aaa\nbbb\nccc'", Tok::String, 13);
+      m!(string, "'aaa\r\nbbb\r\nccc'", Tok::String, 15);
+      m!(string, "'aaa\r\nbbb\r\nccc'\r\n", Tok::String, 15);
+      m!(string, "'aaa\r\nbbb\r\nccc'", Tok::String, 15);
+      m!(string, "'aaa\\nbbb'", Tok::String, 10);
+      m!(string, "'aaa\\rbbb'", Tok::String, 10);
+      m!(string, "'aaa\\tbbb'", Tok::String, 10);
+      m!(string, "'aaa\\\\bbb'", Tok::String, 10);
+      m!(string, "'aaa\\\'bbb'", Tok::String, 10);
+      m!(string, "'aaa\\0bbb'", Tok::String, 10);
    }
 
    #[test]

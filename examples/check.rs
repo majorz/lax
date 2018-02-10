@@ -7,12 +7,12 @@ fn main() {
 
    let tokens = tokenize(string);
 
-   let syns = tokens
+   let toks = tokens
       .iter()
-      .map(|token| token.syn)
+      .map(|token| token.tok)
       .collect::<Vec<_>>();
 
-   let mut peeker = Peeker::new(&syns);
+   let mut peeker = Peeker::new(&toks);
 
    let result = expression(&mut peeker);
 
@@ -24,16 +24,16 @@ fn main() {
 
    println!("remaining: {}", peeker.remaining());
 
-   let count = syns.len() - peeker.remaining();
+   let count = toks.len() - peeker.remaining();
 
-   syns[..count].iter().enumerate().for_each(
+   toks[..count].iter().enumerate().for_each(
       |(i, item)|
          println!("[{:03}] {:?}", i, item)
    );
 
    println!("======");
 
-   syns[count..].iter().enumerate().for_each(
+   toks[count..].iter().enumerate().for_each(
       |(i, item)|
          println!("[{:03}] {:?}", count + i, item)
    );
@@ -45,10 +45,10 @@ fn expression(peeker: &mut Peeker) -> Option<usize> {
 
    loop {
       let operators = [
-         &Syn::Add,
-         &Syn::Subtract,
-         &Syn::Multiply,
-         &Syn::Divide,
+         &Tok::Add,
+         &Tok::Subtract,
+         &Tok::Multiply,
+         &Tok::Divide,
       ];
 
       if peeker.optional_from_slice(&operators).is_some() {
@@ -66,11 +66,11 @@ fn expression(peeker: &mut Peeker) -> Option<usize> {
 }
 
 fn parens(peeker: &mut Peeker) -> Option<usize> {
-   peeker.next(&Syn::ParenLeft)?;
+   peeker.next(&Tok::ParenLeft)?;
 
    peeker.descend(expression)?;
 
-   peeker.next(&Syn::ParenRight)?;
+   peeker.next(&Tok::ParenRight)?;
 
    peeker.commit()
 }
@@ -92,18 +92,18 @@ fn single(peeker: &mut Peeker) -> Option<usize> {
 }
 
 fn ident(peeker: &mut Peeker) -> Option<usize> {
-   peeker.next(&Syn::Ident)?;
+   peeker.next(&Tok::Ident)?;
    peeker.commit()
 }
 
 fn number(peeker: &mut Peeker) -> Option<usize> {
-   if peeker.optional(&Syn::Digits).is_some() {
-      if peeker.optional(&Syn::Dot).is_some() {
-         peeker.optional(&Syn::Digits);
+   if peeker.optional(&Tok::Digits).is_some() {
+      if peeker.optional(&Tok::Dot).is_some() {
+         peeker.optional(&Tok::Digits);
       }
    } else {
-      peeker.next(&Syn::Dot)?;
-      peeker.next(&Syn::Digits)?;
+      peeker.next(&Tok::Dot)?;
+      peeker.next(&Tok::Digits)?;
    }
 
    peeker.commit()
@@ -111,13 +111,13 @@ fn number(peeker: &mut Peeker) -> Option<usize> {
 
 #[derive(Clone)]
 pub struct Peeker<'s> {
-   input: &'s [Syn],
+   input: &'s [Tok],
    start: usize,
    peek: usize,
 }
 
 impl<'s> Peeker<'s> {
-   fn new(input: &'s [Syn]) -> Self {
+   fn new(input: &'s [Tok]) -> Self {
       Peeker {
          input: input,
          start: 0,
@@ -130,7 +130,7 @@ impl<'s> Peeker<'s> {
       Some(self.peek)
    }
 
-   fn current(&self) -> Option<&'s Syn> {
+   fn current(&self) -> Option<&'s Tok> {
       self.input.get(self.peek)
    }
 
@@ -157,7 +157,7 @@ impl<'s> Peeker<'s> {
    }
 
    #[allow(dead_code)]
-   fn next_fn(&mut self, f: fn(item: &Syn) -> bool) -> Option<usize> {
+   fn next_fn(&mut self, f: fn(item: &Tok) -> bool) -> Option<usize> {
       if let Some(current) = self.current() {
          if f(current) {
             return self.step();
@@ -166,7 +166,7 @@ impl<'s> Peeker<'s> {
       self.reset()
    }
 
-   fn next(&mut self, item: &Syn) -> Option<usize> {
+   fn next(&mut self, item: &Tok) -> Option<usize> {
       if let Some(current) = self.current() {
          if *current == *item {
             return self.step();
@@ -175,7 +175,7 @@ impl<'s> Peeker<'s> {
       self.reset()
    }
 
-   fn optional_from_slice(&mut self, items: &[&Syn]) -> Option<usize> {
+   fn optional_from_slice(&mut self, items: &[&Tok]) -> Option<usize> {
       if let Some(current) = self.current() {
          for item in items {
             if *current == **item {
@@ -186,7 +186,7 @@ impl<'s> Peeker<'s> {
       None
    }
 
-   fn optional(&mut self, item: &Syn) -> Option<usize> {
+   fn optional(&mut self, item: &Tok) -> Option<usize> {
       if let Some(current) = self.current() {
          if *current == *item {
             return self.step();
