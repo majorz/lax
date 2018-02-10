@@ -37,7 +37,7 @@ pub enum Tok {
    Comment,
    Accent,
    String,
-   Ident,
+   Identifier,
    Symbol,
    Digits,
    Fn,
@@ -281,9 +281,9 @@ fn symbol(peeker: &mut StrPeeker) -> TokMatch {
 
    peeker.require(|b| b == b'^')?;
 
-   advance_ident(peeker)?;
+   advance_identifier(peeker)?;
 
-   if Tok::Ident == tok_from_ident(&peeker.reveal()[1..]) {
+   if Tok::Identifier == tok_from_identifier(&peeker.reveal()[1..]) {
       let span = peeker.commit();
       Some((Tok::Symbol, span, span))
    } else {
@@ -291,17 +291,17 @@ fn symbol(peeker: &mut StrPeeker) -> TokMatch {
    }
 }
 
-fn ident(peeker: &mut StrPeeker) -> TokMatch {
+fn identifier(peeker: &mut StrPeeker) -> TokMatch {
    debug_assert!(peeker.has_more());
 
-   advance_ident(peeker)?;
+   advance_identifier(peeker)?;
 
-   let tok = tok_from_ident(peeker.reveal());
+   let tok = tok_from_identifier(peeker.reveal());
    let span = peeker.commit();
    Some((tok, span, span))
 }
 
-fn advance_ident(peeker: &mut StrPeeker) -> Option<()> {
+fn advance_identifier(peeker: &mut StrPeeker) -> Option<()> {
    peeker.require(
       |b| {
          (b >= b'a' && b <= b'z') ||
@@ -322,14 +322,14 @@ fn advance_ident(peeker: &mut StrPeeker) -> Option<()> {
    Some(())
 }
 
-fn tok_from_ident(ident: &str) -> Tok {
+fn tok_from_identifier(identifier: &str) -> Tok {
    for &(keyword, tok) in KEYWORDS.iter() {
-      if keyword == ident {
+      if keyword == identifier {
          return tok;
       }
    }
 
-   Tok::Ident
+   Tok::Identifier
 }
 
 fn digits(peeker: &mut StrPeeker) -> TokMatch {
@@ -409,7 +409,7 @@ const MATCHERS: [fn(peeker: &mut StrPeeker) -> TokMatch; 33] = [
    angle_right,
    curly_left,
    curly_right,
-   ident,
+   identifier,
    digits,
    dot,
    symbol,
@@ -589,48 +589,48 @@ mod tests {
    }
 
    #[test]
-   fn test_ident() {
-      m!(ident, "-");
-      m!(ident, "-name");
-      m!(ident, "012abc");
-      m!(ident, "_", Tok::Ident, 1);
-      m!(ident, "__", Tok::Ident, 2);
-      m!(ident, "_.", Tok::Ident, 1);
-      m!(ident, "_name", Tok::Ident, 5);
-      m!(ident, "name", Tok::Ident, 4);
-      m!(ident, "_NAME.", Tok::Ident, 5);
-      m!(ident, "NAME.", Tok::Ident, 4);
-      m!(ident, "a100", Tok::Ident, 4);
-      m!(ident, "a100.", Tok::Ident, 4);
-      m!(ident, "a_a_a.", Tok::Ident, 5);
-      m!(ident, "aЯ", Tok::Ident, 1);
+   fn test_identifier() {
+      m!(identifier, "-");
+      m!(identifier, "-name");
+      m!(identifier, "012abc");
+      m!(identifier, "_", Tok::Identifier, 1);
+      m!(identifier, "__", Tok::Identifier, 2);
+      m!(identifier, "_.", Tok::Identifier, 1);
+      m!(identifier, "_name", Tok::Identifier, 5);
+      m!(identifier, "name", Tok::Identifier, 4);
+      m!(identifier, "_NAME.", Tok::Identifier, 5);
+      m!(identifier, "NAME.", Tok::Identifier, 4);
+      m!(identifier, "a100", Tok::Identifier, 4);
+      m!(identifier, "a100.", Tok::Identifier, 4);
+      m!(identifier, "a_a_a.", Tok::Identifier, 5);
+      m!(identifier, "aЯ", Tok::Identifier, 1);
    }
 
    #[test]
    #[should_panic]
    #[cfg(debug_assertions)]
-   fn test_ident_empty() {
-      e!(ident);
+   fn test_identifier_empty() {
+      e!(identifier);
    }
 
    #[test]
    fn test_keyword() {
-      m!(ident, "fn", Tok::Fn, 2);
-      m!(ident, "loop", Tok::Loop, 4);
-      m!(ident, "match", Tok::Match, 5);
-      m!(ident, "if", Tok::If, 2);
-      m!(ident, "ef", Tok::Ef, 2);
-      m!(ident, "el", Tok::El, 2);
-      m!(ident, "break", Tok::Break, 5);
-      m!(ident, "ret", Tok::Ret, 3);
-      m!(ident, "for", Tok::For, 3);
-      m!(ident, "in", Tok::In, 2);
-      m!(ident, "and", Tok::And, 3);
-      m!(ident, "or", Tok::Or, 2);
-      m!(ident, "not", Tok::Not, 3);
-      m!(ident, "for", Tok::For, 3);
-      m!(ident, "break_", Tok::Ident, 6);
-      m!(ident, "ret100", Tok::Ident, 6);
+      m!(identifier, "fn", Tok::Fn, 2);
+      m!(identifier, "loop", Tok::Loop, 4);
+      m!(identifier, "match", Tok::Match, 5);
+      m!(identifier, "if", Tok::If, 2);
+      m!(identifier, "ef", Tok::Ef, 2);
+      m!(identifier, "el", Tok::El, 2);
+      m!(identifier, "break", Tok::Break, 5);
+      m!(identifier, "ret", Tok::Ret, 3);
+      m!(identifier, "for", Tok::For, 3);
+      m!(identifier, "in", Tok::In, 2);
+      m!(identifier, "and", Tok::And, 3);
+      m!(identifier, "or", Tok::Or, 2);
+      m!(identifier, "not", Tok::Not, 3);
+      m!(identifier, "for", Tok::For, 3);
+      m!(identifier, "break_", Tok::Identifier, 6);
+      m!(identifier, "ret100", Tok::Identifier, 6);
    }
 
    #[test]

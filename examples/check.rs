@@ -77,7 +77,7 @@ fn parens(peeker: &mut Peeker) -> Option<usize> {
 
 fn single(peeker: &mut Peeker) -> Option<usize> {
    let fns = [
-      ident,
+      identifier,
       number,
       parens,
    ];
@@ -91,8 +91,8 @@ fn single(peeker: &mut Peeker) -> Option<usize> {
    peeker.reset()
 }
 
-fn ident(peeker: &mut Peeker) -> Option<usize> {
-   peeker.next(&Tok::Ident)?;
+fn identifier(peeker: &mut Peeker) -> Option<usize> {
+   peeker.next(&Tok::Identifier)?;
    peeker.commit()
 }
 
