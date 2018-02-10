@@ -51,20 +51,20 @@ pub enum Tok {
    In,
 }
 
-const KEYWORDS: [(&str, Tok); 13] = [
-   ("fn", Tok::Fn),
-   ("loop", Tok::Loop),
-   ("match", Tok::Match),
-   ("if", Tok::If),
-   ("ef", Tok::Ef),
-   ("el", Tok::El),
-   ("break", Tok::Break),
-   ("ret", Tok::Ret),
-   ("for", Tok::For),
-   ("in", Tok::In),
-   ("and", Tok::And),
-   ("or", Tok::Or),
-   ("not", Tok::Not),
+const KEYWORDS: [(&[char], Tok); 13] = [
+   (&['f', 'n'], Tok::Fn),
+   (&['l', 'o', 'o', 'p'], Tok::Loop),
+   (&['m', 'a', 't', 'c', 'h'], Tok::Match),
+   (&['i', 'f'], Tok::If),
+   (&['e', 'f'], Tok::Ef),
+   (&['e', 'l'], Tok::El),
+   (&['b', 'r', 'e', 'a', 'k'], Tok::Break),
+   (&['r', 'e', 't'], Tok::Ret),
+   (&['f', 'o', 'r'], Tok::For),
+   (&['i', 'n'], Tok::In),
+   (&['a', 'n', 'd'], Tok::And),
+   (&['o', 'r'], Tok::Or),
+   (&['n', 'o', 't'], Tok::Not),
 ];
 
 pub struct Token {
@@ -75,15 +75,15 @@ pub struct Token {
    pub col: usize,
 }
 
-type TokMatch = Option<(Tok, usize, usize)>;
+type TokMatch = Option<(Tok, usize)>;
 
 pub struct StrPeeker<'s> {
-   input: &'s str,
-   peek: &'s str,
+   input: &'s [char],
+   peek: &'s [char],
 }
 
 impl<'s> StrPeeker<'s> {
-   fn new(input: &'s str) -> Self {
+   fn new(input: &'s [char]) -> Self {
       StrPeeker {
          input: input,
          peek: input,
@@ -106,7 +106,7 @@ impl<'s> StrPeeker<'s> {
       self.peek.len() >= span
    }
 
-   fn exact(&mut self, front: &'static str) -> Option<()> {
+   fn exact(&mut self, front: &[char]) -> Option<()> {
       let span = front.len();
       if self.peek.len() >= span && &self.peek[..span] == front {
          self.peek = &self.peek[span..];
@@ -117,13 +117,13 @@ impl<'s> StrPeeker<'s> {
       }
    }
 
-   fn require(&mut self, f: fn(b: u8) -> bool) -> Option<()> {
+   fn require(&mut self, f: fn(char) -> bool) -> Option<()> {
       if self.peek.is_empty() {
          self.peek = self.input;
       }
 
-      let byte = self.peek.as_bytes()[0];
-      if f(byte) {
+      let ch = self.peek[0];
+      if f(ch) {
          self.peek = &self.peek[1..];
          Some(())
       } else {
@@ -132,10 +132,20 @@ impl<'s> StrPeeker<'s> {
       }
    }
 
-   fn multiple(&mut self, f: fn(b: u8) -> bool) -> Option<()> {
+   fn next(&mut self) -> Option<char> {
+      if let Some(ch) = self.peek.first() {
+         self.peek = &self.peek[1..];
+         Some(*ch)
+      } else {
+         self.peek = self.input;
+         None
+      }
+   }
+
+   fn multiple(&mut self, f: fn(char) -> bool) -> Option<()> {
       let mut span = 0;
-      for byte in self.peek.as_bytes() {
-         if !f(*byte) {
+      for ch in self.peek {
+         if !f(*ch) {
             break;
          }
          span += 1;
@@ -150,10 +160,10 @@ impl<'s> StrPeeker<'s> {
       }
    }
 
-   fn any(&mut self, f: fn(b: u8) -> bool) {
+   fn any(&mut self, f: fn(char) -> bool) {
       let mut span = 0;
-      for byte in self.peek.as_bytes() {
-         if !f(*byte) {
+      for ch in self.peek {
+         if !f(*ch) {
             break;
          }
          span += 1;
@@ -162,80 +172,13 @@ impl<'s> StrPeeker<'s> {
       self.peek = &self.peek[span..];
    }
 
-   fn char_advancer<'p>(&'p mut self) -> CharAdvancer<'p, 's> {
-      CharAdvancer::new(self)
-   }
-
-   fn reveal<'p>(&'p self) -> &'s str {
+   fn reveal<'p>(&'p self) -> &'s [char] {
       &self.input[..self.input.len() - self.peek.len()]
-   }
-
-   fn char_indices<'p>(&'p self) -> ::std::str::CharIndices<'s> {
-      self.peek.char_indices()
-   }
-
-   fn reset(&mut self) {
-      self.peek = self.input;
-   }
-
-   fn advance(&mut self, delta: usize) {
-      self.peek = &self.peek[delta..];
-   }
-}
-
-pub struct CharAdvancer<'p, 's: 'p> {
-   peeker: &'p mut StrPeeker<'s>,
-   indices: ::std::str::CharIndices<'s>,
-   end: usize,
-   chars: usize,
-}
-
-impl<'p, 's> CharAdvancer<'p, 's> {
-   fn new(peeker: &'p mut StrPeeker<'s>) -> Self {
-      let indices = peeker.char_indices();
-      CharAdvancer {
-         peeker: peeker,
-         indices: indices,
-         end: 0,
-         chars: 0,
-      }
-   }
-
-   fn next(&mut self) -> Option<char> {
-      if let Some((pos, ch)) = self.indices.next() {
-         self.end = pos + 1;
-         self.chars += 1;
-         Some(ch)
-      } else {
-         self.peeker.reset();
-         None
-      }
-   }
-
-   fn require(&mut self, f: fn(ch: char) -> bool) -> Option<()> {
-      if let Some((pos, ch)) = self.indices.next() {
-         if f(ch) {
-            self.end = pos + 1;
-            self.chars += 1;
-            return Some(());
-         }
-      }
-
-      self.peeker.reset();
-      None
-   }
-
-   fn commit(&mut self) -> usize {
-      self.peeker.advance(self.end);
-      let chars = self.chars;
-      self.end = 0;
-      self.chars = 0;
-      chars
    }
 }
 
 fn space(peeker: &mut StrPeeker) -> Option<usize> {
-   peeker.multiple(|b| b == b' ')?;
+   peeker.multiple(|c| c == ' ')?;
 
    Some(peeker.commit())
 }
@@ -243,28 +186,23 @@ fn space(peeker: &mut StrPeeker) -> Option<usize> {
 fn string(peeker: &mut StrPeeker) -> TokMatch {
    debug_assert!(peeker.has_more());
 
-   peeker.require(|b| b == b'\'')?;
+   peeker.require(|c| c == '\'')?;
 
-   let chars = {
-      let mut advancer = peeker.char_advancer();
-      loop {
-         match advancer.next()? {
-            '\\' => {
-               advancer.require(|c| {
-                  c == 'n' || c == '\'' || c == '\\' || c == 'r' || c == 't' || c == '0'
-               })?;
-            }
-            '\'' => {
-               break;
-            }
-            _ => {}
+   loop {
+      match peeker.next()? {
+         '\\' => {
+            peeker.require(|c| {
+               c == 'n' || c == '\'' || c == '\\' || c == 'r' || c == 't' || c == '0'
+            })?;
          }
+         '\'' => {
+            break;
+         }
+         _ => {}
       }
-      advancer.commit()
-   };
+   }
 
-   let span = peeker.commit();
-   Some((Tok::String, span, chars + 1))
+   Some((Tok::String, peeker.commit()))
 }
 
 fn symbol(peeker: &mut StrPeeker) -> TokMatch {
@@ -274,13 +212,12 @@ fn symbol(peeker: &mut StrPeeker) -> TokMatch {
       return None;
    }
 
-   peeker.require(|b| b == b'^')?;
+   peeker.require(|c| c == '^')?;
 
    advance_identifier(peeker)?;
 
    if Tok::Identifier == tok_from_identifier(&peeker.reveal()[1..]) {
-      let span = peeker.commit();
-      Some((Tok::Symbol, span, span))
+      Some((Tok::Symbol, peeker.commit()))
    } else {
       None
    }
@@ -292,21 +229,20 @@ fn identifier(peeker: &mut StrPeeker) -> TokMatch {
    advance_identifier(peeker)?;
 
    let tok = tok_from_identifier(peeker.reveal());
-   let span = peeker.commit();
-   Some((tok, span, span))
+   Some((tok, peeker.commit()))
 }
 
 fn advance_identifier(peeker: &mut StrPeeker) -> Option<()> {
-   peeker.require(|b| (b >= b'a' && b <= b'z') || (b >= b'A' && b <= b'Z') || b == b'_')?;
+   peeker.require(|c| (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '_')?;
 
-   peeker.any(|b| {
-      (b >= b'a' && b <= b'z') || (b >= b'A' && b <= b'Z') || (b >= b'0' && b <= b'9') || b == b'_'
+   peeker.any(|c| {
+      (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '_'
    });
 
    Some(())
 }
 
-fn tok_from_identifier(identifier: &str) -> Tok {
+fn tok_from_identifier(identifier: &[char]) -> Tok {
    for &(keyword, ref tok) in &KEYWORDS {
       if keyword == identifier {
          return (*tok).clone();
@@ -317,10 +253,9 @@ fn tok_from_identifier(identifier: &str) -> Tok {
 }
 
 fn digits(peeker: &mut StrPeeker) -> TokMatch {
-   peeker.multiple(|b| b >= b'0' && b <= b'9')?;
+   peeker.multiple(|c| c >= '0' && c <= '9')?;
 
-   let span = peeker.commit();
-   Some((Tok::Digits, span, span))
+   Some((Tok::Digits, peeker.commit()))
 }
 
 macro_rules! exact {
@@ -328,41 +263,40 @@ macro_rules! exact {
       fn $func(peeker: &mut StrPeeker) -> TokMatch {
          debug_assert!(peeker.has_more());
          peeker.exact($string)?;
-         let span = peeker.commit();
-         Some(($token_type, span, span))
+         Some(($token_type, peeker.commit()))
       }
    }
 }
 
-exact!("\n", new_line_n, Tok::NewLine);
-exact!("\r\n", new_line_rn, Tok::NewLine);
-exact!("\r", new_line_r, Tok::NewLine);
-exact!("**", power, Tok::Power);
-exact!("==", equal, Tok::Equal);
-exact!("!=", unequal, Tok::Unequal);
-exact!("<=", less_equal, Tok::LessEqual);
-exact!(">=", greater_equal, Tok::GreaterEqual);
-exact!("+=", add_assign, Tok::AddAssign);
-exact!("-=", subtract_assign, Tok::SubtractAssign);
-exact!("*=", multiply_assign, Tok::MultiplyAssign);
-exact!("/=", divide_assign, Tok::DivideAssign);
-exact!("..", range, Tok::Range);
-exact!(".", dot, Tok::Dot);
-exact!("=", assign, Tok::Assign);
-exact!("+", add, Tok::Add);
-exact!("-", subtract, Tok::Subtract);
-exact!("*", multiply, Tok::Multiply);
-exact!("/", divide, Tok::Divide);
-exact!("|", bar, Tok::Bar);
-exact!(":", colon, Tok::Colon);
-exact!("(", paren_left, Tok::ParenLeft);
-exact!(")", paren_right, Tok::ParenRight);
-exact!("[", bracket_left, Tok::BracketLeft);
-exact!("]", bracket_right, Tok::BracketRight);
-exact!("<", angle_left, Tok::AngleLeft);
-exact!(">", angle_right, Tok::AngleRight);
-exact!("{", curly_left, Tok::CurlyLeft);
-exact!("}", curly_right, Tok::CurlyRight);
+exact!(&['\n'], new_line_n, Tok::NewLine);
+exact!(&['\r', '\n'], new_line_rn, Tok::NewLine);
+exact!(&['\r'], new_line_r, Tok::NewLine);
+exact!(&['*', '*'], power, Tok::Power);
+exact!(&['=', '='], equal, Tok::Equal);
+exact!(&['!', '='], unequal, Tok::Unequal);
+exact!(&['<', '='], less_equal, Tok::LessEqual);
+exact!(&['>', '='], greater_equal, Tok::GreaterEqual);
+exact!(&['+', '='], add_assign, Tok::AddAssign);
+exact!(&['-', '='], subtract_assign, Tok::SubtractAssign);
+exact!(&['*', '='], multiply_assign, Tok::MultiplyAssign);
+exact!(&['/', '='], divide_assign, Tok::DivideAssign);
+exact!(&['.', '.'], range, Tok::Range);
+exact!(&['.'], dot, Tok::Dot);
+exact!(&['='], assign, Tok::Assign);
+exact!(&['+'], add, Tok::Add);
+exact!(&['-'], subtract, Tok::Subtract);
+exact!(&['*'], multiply, Tok::Multiply);
+exact!(&['/'], divide, Tok::Divide);
+exact!(&['|'], bar, Tok::Bar);
+exact!(&[':'], colon, Tok::Colon);
+exact!(&['('], paren_left, Tok::ParenLeft);
+exact!(&[')'], paren_right, Tok::ParenRight);
+exact!(&['['], bracket_left, Tok::BracketLeft);
+exact!(&[']'], bracket_right, Tok::BracketRight);
+exact!(&['<'], angle_left, Tok::AngleLeft);
+exact!(&['>'], angle_right, Tok::AngleRight);
+exact!(&['{'], curly_left, Tok::CurlyLeft);
+exact!(&['}'], curly_right, Tok::CurlyRight);
 
 const MATCHERS: [fn(peeker: &mut StrPeeker) -> TokMatch; 33] = [
    new_line_n,
@@ -401,6 +335,8 @@ const MATCHERS: [fn(peeker: &mut StrPeeker) -> TokMatch; 33] = [
 ];
 
 pub fn tokenize(input: &str) -> Vec<Token> {
+   let chars: Vec<_> = input.chars().collect();
+
    let mut tokens = vec![];
 
    let mut after_new_line = true;
@@ -409,9 +345,9 @@ pub fn tokenize(input: &str) -> Vec<Token> {
    let mut line = 1;
    let mut col = 1;
 
-   let mut peeker = StrPeeker::new(input);
+   let mut peeker = StrPeeker::new(&chars);
 
-   while pos < input.len() {
+   while pos < chars.len() {
       if let Some(span) = space(&mut peeker) {
          if after_new_line {
             assert!(span % INDENT == 0);
@@ -433,7 +369,7 @@ pub fn tokenize(input: &str) -> Vec<Token> {
          }
       }
 
-      if let Some((tok, span, chars)) = match_tok(&mut peeker) {
+      if let Some((tok, span)) = match_tok(&mut peeker) {
          after_new_line = tok == Tok::NewLine;
 
          tokens.push(Token {
@@ -450,7 +386,7 @@ pub fn tokenize(input: &str) -> Vec<Token> {
          }
 
          pos += span;
-         col += chars;
+         col += span;
       } else {
          panic!("Unrecognized token at line: {}, col: {}", line, col);
       }
@@ -461,8 +397,8 @@ pub fn tokenize(input: &str) -> Vec<Token> {
 
 fn match_tok(peeker: &mut StrPeeker) -> TokMatch {
    for matcher in MATCHERS.iter() {
-      if let Some((tok, span, chars)) = matcher(peeker) {
-         return Some((tok, span, chars));
+      if let Some((tok, span)) = matcher(peeker) {
+         return Some((tok, span));
       }
    }
 
@@ -473,31 +409,34 @@ fn match_tok(peeker: &mut StrPeeker) -> TokMatch {
 mod tests {
    use super::*;
 
+   fn as_chars(input: &str) -> Vec<char> {
+      input.chars().collect()
+   }
+
    macro_rules! m {
       ($matcher:ident, $input:expr) => (
-         let mut peeker = StrPeeker::new($input);
+         let chars = as_chars($input);
+         let mut peeker = StrPeeker::new(&chars);
          assert_eq!($matcher(&mut peeker), None);
       );
 
       ($matcher:ident, $input:expr, $tok:expr, $span:expr) => (
-         let mut peeker = StrPeeker::new($input);
-         assert_eq!($matcher(&mut peeker), Some(($tok, $span, $span)));
-      );
-
-      ($matcher:ident, $input:expr, $tok:expr, $span:expr, $chars:expr) => (
-         let mut peeker = StrPeeker::new($input);
-         assert_eq!($matcher(&mut peeker), Some(($tok, $span, $chars)));
+         let chars = as_chars($input);
+         let mut peeker = StrPeeker::new(&chars);
+         assert_eq!($matcher(&mut peeker), Some(($tok, $span)));
       );
    }
 
    macro_rules! space {
       ($input:expr) => (
-         let mut peeker = StrPeeker::new($input);
+         let chars = as_chars($input);
+         let mut peeker = StrPeeker::new(&chars);
          assert_eq!(space(&mut peeker), None);
       );
 
       ($input:expr, $span:expr) => (
-         let mut peeker = StrPeeker::new($input);
+         let chars = as_chars($input);
+         let mut peeker = StrPeeker::new(&chars);
          assert_eq!(space(&mut peeker), Some($span));
       );
    }
@@ -505,7 +444,7 @@ mod tests {
    #[cfg(debug_assertions)]
    macro_rules! e {
       ($matcher:ident) => (
-         $matcher(&mut StrPeeker::new(""));
+         $matcher(&mut StrPeeker::new(&[]));
       )
    }
 
@@ -638,9 +577,9 @@ mod tests {
       m!(string, "'aaa\\\"bbb'");
       m!(string, "''", Tok::String, 2);
       m!(string, "'a'", Tok::String, 3);
-      m!(string, "'Я'", Tok::String, 4, 3);
-      m!(string, "'y̆'", Tok::String, 5, 4);
-      m!(string, "'ЯaЯaЯ'", Tok::String, 10, 7);
+      m!(string, "'Я'", Tok::String, 3);
+      m!(string, "'y̆'", Tok::String, 4);
+      m!(string, "'ЯaЯaЯ'", Tok::String, 7);
       m!(string, "'''", Tok::String, 2);
       m!(string, "'aaa bbb'", Tok::String, 9);
       m!(string, "'aaa bbb' ", Tok::String, 9);
