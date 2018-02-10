@@ -9,14 +9,14 @@ fn main() {
 
    let toks = tokens
       .iter()
-      .map(|token| token.tok)
+      .map(|token| token.tok.clone())
       .collect::<Vec<_>>();
 
    let mut peeker = Peeker::new(&toks);
 
    let result = expression(&mut peeker);
 
-   if let Some(_) = result {
+   if result.is_some() {
       println!("done");
    } else {
       println!("nope");

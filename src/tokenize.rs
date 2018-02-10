@@ -1,7 +1,7 @@
 
 const INDENT: usize = 3;
 
-#[derive(Debug, Copy, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Tok {
    Indent,
    NewLine,
@@ -52,7 +52,7 @@ pub enum Tok {
    In,
 }
 
-const KEYWORDS: [(&'static str, Tok); 13] = [
+const KEYWORDS: [(&str, Tok); 13] = [
    ("fn",     Tok::Fn),
    ("loop",   Tok::Loop),
    ("match",  Tok::Match),
@@ -68,7 +68,6 @@ const KEYWORDS: [(&'static str, Tok); 13] = [
    ("not",    Tok::Not),
 ];
 
-#[derive(Debug, Copy, Clone, PartialEq)]
 pub struct Token {
    pub tok: Tok,
    pub span: usize,
@@ -101,7 +100,7 @@ impl<'s> StrPeeker<'s> {
    }
 
    fn has_more(&mut self) -> bool {
-      self.peek.len() > 0
+      !self.peek.is_empty()
    }
 
    fn has_at_least(&mut self, span: usize) -> bool {
@@ -323,9 +322,9 @@ fn advance_identifier(peeker: &mut StrPeeker) -> Option<()> {
 }
 
 fn tok_from_identifier(identifier: &str) -> Tok {
-   for &(keyword, tok) in KEYWORDS.iter() {
+   for &(keyword, ref tok) in &KEYWORDS {
       if keyword == identifier {
-         return tok;
+         return (*tok).clone();
       }
    }
 
@@ -452,6 +451,8 @@ pub fn tokenize(input: &str) -> Vec<Token> {
       }
 
       if let Some((tok, span, chars)) = match_tok(&mut peeker) {
+         after_new_line = tok == Tok::NewLine;
+
          tokens.push(
             Token {
                tok,
@@ -462,7 +463,6 @@ pub fn tokenize(input: &str) -> Vec<Token> {
             }
          );
 
-         after_new_line = tok == Tok::NewLine;
          if after_new_line {
             line += 1;
             col = 1;
