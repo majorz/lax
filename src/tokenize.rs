@@ -1,7 +1,9 @@
 
+const INDENT: usize = 3;
+
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub enum Syn {
-   Space,
+   Indentation,
    NewLine,
    Power,
    Equal,
@@ -234,11 +236,10 @@ impl<'p, 's> CharAdvancer<'p, 's> {
    }
 }
 
-fn space(peeker: &mut StrPeeker) -> SynMatch {
+fn space(peeker: &mut StrPeeker) -> Option<usize> {
    peeker.multiple(|b| b == b' ')?;
 
-   let span = peeker.commit();
-   Some((Syn::Space, span, span))
+   Some(peeker.commit())
 }
 
 fn string(peeker: &mut StrPeeker) -> SynMatch {
@@ -379,8 +380,7 @@ exact!(">", angle_right, Syn::AngleRight);
 exact!("{", curly_left, Syn::CurlyLeft);
 exact!("}", curly_right, Syn::CurlyRight);
 
-const MATCHERS: [fn(peeker: &mut StrPeeker) -> SynMatch; 34] = [
-   space,
+const MATCHERS: [fn(peeker: &mut StrPeeker) -> SynMatch; 33] = [
    new_line_n,
    new_line_rn,
    new_line_r,
@@ -419,6 +419,8 @@ const MATCHERS: [fn(peeker: &mut StrPeeker) -> SynMatch; 34] = [
 pub fn tokenize(input: &str) -> Vec<Token> {
    let mut tokens = vec![];
 
+   let mut after_new_line = true;
+
    let mut pos = 0;
    let mut line = 1;
    let mut col = 1;
@@ -426,6 +428,29 @@ pub fn tokenize(input: &str) -> Vec<Token> {
    let mut peeker = StrPeeker::new(input);
 
    while pos < input.len() {
+      if let Some(span) = space(&mut peeker) {
+         if after_new_line {
+            assert!(span % INDENT == 0);
+            let indents = span / INDENT;
+            for _ in 0..indents {
+               pos += INDENT;
+               col += INDENT;
+               tokens.push(
+                  Token {
+                     syn: Syn::Indentation,
+                     span: INDENT,
+                     pos,
+                     line,
+                     col,
+                  }
+               );
+            }
+         } else {
+            pos += span;
+            col += span;
+         }
+      }
+
       if let Some((syn, span, chars)) = match_syn(&mut peeker) {
          tokens.push(
             Token {
@@ -437,7 +462,8 @@ pub fn tokenize(input: &str) -> Vec<Token> {
             }
          );
 
-         if syn == Syn::NewLine {
+         after_new_line = syn == Syn::NewLine;
+         if after_new_line {
             line += 1;
             col = 1;
          }
@@ -483,6 +509,18 @@ mod tests {
       );
    }
 
+   macro_rules! space {
+      ($input:expr) => (
+         let mut peeker = StrPeeker::new($input);
+         assert_eq!(space(&mut peeker), None);
+      );
+
+      ($input:expr, $span:expr) => (
+         let mut peeker = StrPeeker::new($input);
+         assert_eq!(space(&mut peeker), Some($span));
+      );
+   }
+
    #[cfg(debug_assertions)]
    macro_rules! e {
       ($matcher:ident) => (
@@ -512,13 +550,13 @@ mod tests {
 
    #[test]
    fn test_space() {
-      m!(space, "");
-      m!(space, "-");
-      m!(space, "- ");
-      m!(space, " ", Syn::Space, 1);
-      m!(space, " -", Syn::Space, 1);
-      m!(space, "   ", Syn::Space, 3);
-      m!(space, "   -", Syn::Space, 3);
+      space!("");
+      space!("-");
+      space!("- ");
+      space!(" ", 1);
+      space!(" -", 1);
+      space!("   ", 3);
+      space!("   -", 3);
    }
 
    #[test]

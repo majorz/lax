@@ -4,7 +4,7 @@ use std::fs::File;
 use std::io::prelude::*;
 
 use nel::tokenize::tokenize;
-use nel::parse::Parser;
+//use nel::parse::Parser;
 
 
 fn main() {
@@ -14,7 +14,7 @@ fn main() {
     f.read_to_string(&mut input)
         .expect("something went wrong reading the file");
 
-   let tokens = tokenize(&input);
+   let _ = tokenize(&input);
 
 /*
    for (i, token) in tokens.iter().enumerate() {
@@ -22,5 +22,5 @@ fn main() {
    }
 */
 
-   Parser::init(&tokens, &input).parse();
+//   Parser::init(&tokens, &input).parse();
 }
