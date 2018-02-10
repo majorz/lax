@@ -12,8 +12,7 @@ use std::io::prelude::*;
 use nel::tokenize::*;
 
 fn tokenize_benchmark(c: &mut Criterion) {
-   let mut f = File::open("nel/tokenize.nel")
-      .expect("file not found");
+   let mut f = File::open("nel/tokenize.nel").expect("file not found");
 
    let mut source = String::new();
    f.read_to_string(&mut source)

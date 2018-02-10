@@ -26,30 +26,24 @@ fn main() {
 
    let count = toks.len() - peeker.remaining();
 
-   toks[..count].iter().enumerate().for_each(
-      |(i, item)|
-         println!("[{:03}] {:?}", i, item)
-   );
+   toks[..count]
+      .iter()
+      .enumerate()
+      .for_each(|(i, item)| println!("[{:03}] {:?}", i, item));
 
    println!("======");
 
-   toks[count..].iter().enumerate().for_each(
-      |(i, item)|
-         println!("[{:03}] {:?}", count + i, item)
-   );
-
+   toks[count..]
+      .iter()
+      .enumerate()
+      .for_each(|(i, item)| println!("[{:03}] {:?}", count + i, item));
 }
 
 fn expression(peeker: &mut Peeker) -> Option<usize> {
    let mut pos = peeker.descend(single)?;
 
    loop {
-      let operators = [
-         &Tok::Add,
-         &Tok::Subtract,
-         &Tok::Multiply,
-         &Tok::Divide,
-      ];
+      let operators = [&Tok::Add, &Tok::Subtract, &Tok::Multiply, &Tok::Divide];
 
       if peeker.optional_from_slice(&operators).is_some() {
          if let Some(i) = peeker.descend(single) {
@@ -76,11 +70,7 @@ fn parens(peeker: &mut Peeker) -> Option<usize> {
 }
 
 fn single(peeker: &mut Peeker) -> Option<usize> {
-   let fns = [
-      identifier,
-      number,
-      parens,
-   ];
+   let fns = [identifier, number, parens];
 
    for f in &fns {
       if let Some(pos) = peeker.descend(*f) {

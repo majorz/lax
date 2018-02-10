@@ -1,4 +1,3 @@
-
 const INDENT: usize = 3;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -53,19 +52,19 @@ pub enum Tok {
 }
 
 const KEYWORDS: [(&str, Tok); 13] = [
-   ("fn",     Tok::Fn),
-   ("loop",   Tok::Loop),
-   ("match",  Tok::Match),
-   ("if",     Tok::If),
-   ("ef",     Tok::Ef),
-   ("el",     Tok::El),
-   ("break",  Tok::Break),
-   ("ret",    Tok::Ret),
-   ("for",    Tok::For),
-   ("in",     Tok::In),
-   ("and",    Tok::And),
-   ("or",     Tok::Or),
-   ("not",    Tok::Not),
+   ("fn", Tok::Fn),
+   ("loop", Tok::Loop),
+   ("match", Tok::Match),
+   ("if", Tok::If),
+   ("ef", Tok::Ef),
+   ("el", Tok::El),
+   ("break", Tok::Break),
+   ("ret", Tok::Ret),
+   ("for", Tok::For),
+   ("in", Tok::In),
+   ("and", Tok::And),
+   ("or", Tok::Or),
+   ("not", Tok::Not),
 ];
 
 pub struct Token {
@@ -140,7 +139,7 @@ impl<'s> StrPeeker<'s> {
             break;
          }
          span += 1;
-      };
+      }
 
       if span > 0 {
          self.peek = &self.peek[span..];
@@ -158,7 +157,7 @@ impl<'s> StrPeeker<'s> {
             break;
          }
          span += 1;
-      };
+      }
 
       self.peek = &self.peek[span..];
    }
@@ -251,16 +250,13 @@ fn string(peeker: &mut StrPeeker) -> TokMatch {
       loop {
          match advancer.next()? {
             '\\' => {
-               advancer.require(
-                  |c| {
-                     c == 'n' || c == '\'' || c == '\\' ||
-                     c == 'r' || c == 't' || c == '0'
-                  }
-               )?;
-            },
+               advancer.require(|c| {
+                  c == 'n' || c == '\'' || c == '\\' || c == 'r' || c == 't' || c == '0'
+               })?;
+            }
             '\'' => {
                break;
-            },
+            }
             _ => {}
          }
       }
@@ -301,22 +297,11 @@ fn identifier(peeker: &mut StrPeeker) -> TokMatch {
 }
 
 fn advance_identifier(peeker: &mut StrPeeker) -> Option<()> {
-   peeker.require(
-      |b| {
-         (b >= b'a' && b <= b'z') ||
-         (b >= b'A' && b <= b'Z') ||
-         b == b'_'
-      }
-   )?;
+   peeker.require(|b| (b >= b'a' && b <= b'z') || (b >= b'A' && b <= b'Z') || b == b'_')?;
 
-   peeker.any(
-      |b| {
-         (b >= b'a' && b <= b'z') ||
-         (b >= b'A' && b <= b'Z') ||
-         (b >= b'0' && b <= b'9') ||
-         b == b'_'
-      }
-   );
+   peeker.any(|b| {
+      (b >= b'a' && b <= b'z') || (b >= b'A' && b <= b'Z') || (b >= b'0' && b <= b'9') || b == b'_'
+   });
 
    Some(())
 }
@@ -434,15 +419,13 @@ pub fn tokenize(input: &str) -> Vec<Token> {
             for _ in 0..indents {
                pos += INDENT;
                col += INDENT;
-               tokens.push(
-                  Token {
-                     tok: Tok::Indent,
-                     span: INDENT,
-                     pos,
-                     line,
-                     col,
-                  }
-               );
+               tokens.push(Token {
+                  tok: Tok::Indent,
+                  span: INDENT,
+                  pos,
+                  line,
+                  col,
+               });
             }
          } else {
             pos += span;
@@ -453,15 +436,13 @@ pub fn tokenize(input: &str) -> Vec<Token> {
       if let Some((tok, span, chars)) = match_tok(&mut peeker) {
          after_new_line = tok == Tok::NewLine;
 
-         tokens.push(
-            Token {
-               tok,
-               span,
-               pos,
-               line,
-               col,
-            }
-         );
+         tokens.push(Token {
+            tok,
+            span,
+            pos,
+            line,
+            col,
+         });
 
          if after_new_line {
             line += 1;
