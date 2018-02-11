@@ -4,35 +4,35 @@ const INDENT: usize = 3;
 pub enum Tok {
    Indent,
    NewLine,
-   Power,
-   Equal,
-   Unequal,
-   LessEqual,
-   GreaterEqual,
-   AddAssign,
-   SubtractAssign,
-   MultiplyAssign,
-   DivideAssign,
-   Range,
-   Dot,
-   Assign,
-   Add,
-   Subtract,
-   Multiply,
-   Divide,
+   DoubleAsterisk,
+   DoubleEquals,
+   ExclamationEquals,
+   LessThanEquals,
+   GreaterThanEquals,
+   PlusEquals,
+   MinusEquals,
+   AsteriskEquals,
+   SlashEquals,
+   DoubleFullStop,
+   FullStop,
+   Equals,
+   Plus,
+   Minus,
+   Asterisk,
+   Slash,
    And,
    Or,
    Not,
-   Bar,
+   VerticalBar,
    Colon,
    ParenLeft,
    ParenRight,
-   BracketLeft,
-   BracketRight,
-   AngleLeft,
-   AngleRight,
-   CurlyLeft,
-   CurlyRight,
+   SquareBracketLeft,
+   SquareBracketRight,
+   LessThan,
+   GreaterThan,
+   CurlyBracketLeft,
+   CurlyBracketRight,
    Comment,
    Accent,
    String,
@@ -271,65 +271,65 @@ macro_rules! exact {
 exact!(&['\n'], new_line_n, Tok::NewLine);
 exact!(&['\r', '\n'], new_line_rn, Tok::NewLine);
 exact!(&['\r'], new_line_r, Tok::NewLine);
-exact!(&['*', '*'], power, Tok::Power);
-exact!(&['=', '='], equal, Tok::Equal);
-exact!(&['!', '='], unequal, Tok::Unequal);
-exact!(&['<', '='], less_equal, Tok::LessEqual);
-exact!(&['>', '='], greater_equal, Tok::GreaterEqual);
-exact!(&['+', '='], add_assign, Tok::AddAssign);
-exact!(&['-', '='], subtract_assign, Tok::SubtractAssign);
-exact!(&['*', '='], multiply_assign, Tok::MultiplyAssign);
-exact!(&['/', '='], divide_assign, Tok::DivideAssign);
-exact!(&['.', '.'], range, Tok::Range);
-exact!(&['.'], dot, Tok::Dot);
-exact!(&['='], assign, Tok::Assign);
-exact!(&['+'], add, Tok::Add);
-exact!(&['-'], subtract, Tok::Subtract);
-exact!(&['*'], multiply, Tok::Multiply);
-exact!(&['/'], divide, Tok::Divide);
-exact!(&['|'], bar, Tok::Bar);
+exact!(&['*', '*'], double_asterisk, Tok::DoubleAsterisk);
+exact!(&['=', '='], double_equals, Tok::DoubleEquals);
+exact!(&['!', '='], exclamation_equals, Tok::ExclamationEquals);
+exact!(&['<', '='], less_than_equals, Tok::LessThanEquals);
+exact!(&['>', '='], greater_than_equals, Tok::GreaterThanEquals);
+exact!(&['+', '='], plus_equals, Tok::PlusEquals);
+exact!(&['-', '='], minus_equals, Tok::MinusEquals);
+exact!(&['*', '='], asterisk_equals, Tok::AsteriskEquals);
+exact!(&['/', '='], slash_equals, Tok::SlashEquals);
+exact!(&['.', '.'], double_full_stop, Tok::DoubleFullStop);
+exact!(&['.'], full_stop, Tok::FullStop);
+exact!(&['='], equals, Tok::Equals);
+exact!(&['+'], plus, Tok::Plus);
+exact!(&['-'], minus, Tok::Minus);
+exact!(&['*'], asterisk, Tok::Asterisk);
+exact!(&['/'], slash, Tok::Slash);
+exact!(&['|'], vertical_bar, Tok::VerticalBar);
 exact!(&[':'], colon, Tok::Colon);
 exact!(&['('], paren_left, Tok::ParenLeft);
 exact!(&[')'], paren_right, Tok::ParenRight);
-exact!(&['['], bracket_left, Tok::BracketLeft);
-exact!(&[']'], bracket_right, Tok::BracketRight);
-exact!(&['<'], angle_left, Tok::AngleLeft);
-exact!(&['>'], angle_right, Tok::AngleRight);
-exact!(&['{'], curly_left, Tok::CurlyLeft);
-exact!(&['}'], curly_right, Tok::CurlyRight);
+exact!(&['['], square_bracket_left, Tok::SquareBracketLeft);
+exact!(&[']'], square_bracket_right, Tok::SquareBracketRight);
+exact!(&['<'], less_than, Tok::LessThan);
+exact!(&['>'], greater_than, Tok::GreaterThan);
+exact!(&['{'], curly_bracket_left, Tok::CurlyBracketLeft);
+exact!(&['}'], curly_backet_right, Tok::CurlyBracketRight);
 
 const MATCHERS: [fn(peeker: &mut StrPeeker) -> TokMatch; 33] = [
    new_line_n,
    new_line_rn,
    new_line_r,
-   power,
-   equal,
-   unequal,
-   less_equal,
-   greater_equal,
-   add_assign,
-   subtract_assign,
-   multiply_assign,
-   divide_assign,
-   range,
-   assign,
-   add,
-   subtract,
-   multiply,
-   divide,
-   bar,
+   double_asterisk,
+   double_equals,
+   exclamation_equals,
+   less_than_equals,
+   greater_than_equals,
+   plus_equals,
+   minus_equals,
+   asterisk_equals,
+   slash_equals,
+   double_full_stop,
+   equals,
+   plus,
+   minus,
+   asterisk,
+   slash,
+   vertical_bar,
    colon,
    paren_left,
    paren_right,
-   bracket_left,
-   bracket_right,
-   angle_left,
-   angle_right,
-   curly_left,
-   curly_right,
+   square_bracket_left,
+   square_bracket_right,
+   less_than,
+   greater_than,
+   curly_bracket_left,
+   curly_backet_right,
    identifier,
    digits,
-   dot,
+   full_stop,
    symbol,
    string,
 ];
@@ -450,11 +450,11 @@ mod tests {
 
    #[test]
    fn test_exact() {
-      m!(power, "*");
-      m!(power, "-**");
-      m!(multiply, "*", Tok::Multiply, 1);
-      m!(power, "**", Tok::Power, 2);
-      m!(power, "****", Tok::Power, 2);
+      m!(double_asterisk, "*");
+      m!(double_asterisk, "-**");
+      m!(asterisk, "*", Tok::Asterisk, 1);
+      m!(double_asterisk, "**", Tok::DoubleAsterisk, 2);
+      m!(double_asterisk, "****", Tok::DoubleAsterisk, 2);
       m!(new_line_n, "\n\n", Tok::NewLine, 1);
       m!(new_line_rn, "\r\n", Tok::NewLine, 2);
       m!(new_line_r, "\r\r", Tok::NewLine, 1);
@@ -464,8 +464,8 @@ mod tests {
    #[should_panic]
    #[cfg(debug_assertions)]
    fn test_exact_empty() {
-      e!(power);
-      e!(multiply);
+      e!(double_asterisk);
+      e!(asterisk);
    }
 
    #[test]

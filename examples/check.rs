@@ -43,7 +43,7 @@ fn expression(peeker: &mut Peeker) -> Option<usize> {
    let mut pos = peeker.descend(single)?;
 
    loop {
-      let operators = [&Tok::Add, &Tok::Subtract, &Tok::Multiply, &Tok::Divide];
+      let operators = [&Tok::Plus, &Tok::Minus, &Tok::Asterisk, &Tok::Slash];
 
       if peeker.optional_from_slice(&operators).is_some() {
          if let Some(i) = peeker.descend(single) {
@@ -88,11 +88,11 @@ fn identifier(peeker: &mut Peeker) -> Option<usize> {
 
 fn number(peeker: &mut Peeker) -> Option<usize> {
    if peeker.optional(&Tok::Digits).is_some() {
-      if peeker.optional(&Tok::Dot).is_some() {
+      if peeker.optional(&Tok::FullStop).is_some() {
          peeker.optional(&Tok::Digits);
       }
    } else {
-      peeker.next(&Tok::Dot)?;
+      peeker.next(&Tok::FullStop)?;
       peeker.next(&Tok::Digits)?;
    }
 
