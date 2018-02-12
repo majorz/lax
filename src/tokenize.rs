@@ -336,66 +336,101 @@ const MATCHERS: [fn(peeker: &mut StrPeeker) -> TokMatch; 33] = [
 pub fn tokenize(input: &str) -> (Vec<Tok>, Vec<TokMeta>) {
    let chars: Vec<_> = input.chars().collect();
 
-   let mut toks = vec![];
-   let mut toks_meta = vec![];
+   Tokenizer::new(&chars).tokenize()
+}
 
-   let mut after_new_line = true;
+struct Tokenizer<'s> {
+   toks: Vec<Tok>,
+   toks_meta: Vec<TokMeta>,
+   after_new_line: bool,
+   pos: usize,
+   line: usize,
+   col: usize,
+   peeker: StrPeeker<'s>,
+}
 
-   let mut pos = 0;
-   let mut line = 1;
-   let mut col = 1;
+impl<'s> Tokenizer<'s> {
+   fn new(chars: &'s [char]) -> Self {
+      let toks = vec![];
+      let toks_meta = vec![];
 
-   let mut peeker = StrPeeker::new(&chars);
+      let after_new_line = true;
 
-   while pos < chars.len() {
-      if let Some(span) = space(&mut peeker) {
-         if after_new_line {
-            assert!(span % INDENT == 0);
-            let indents = span / INDENT;
-            for _ in 0..indents {
-               pos += INDENT;
-               col += INDENT;
+      let pos = 0;
+      let line = 1;
+      let col = 1;
 
-               toks.push(Tok::Indent);
+      let peeker = StrPeeker::new(chars);
 
-               toks_meta.push(TokMeta {
-                  span: INDENT,
-                  pos,
-                  line,
-                  col,
-               });
-            }
-         } else {
-            pos += span;
-            col += span;
-         }
-      }
-
-      if let Some((tok, span)) = match_tok(&mut peeker) {
-         after_new_line = tok == Tok::NewLine;
-
-         toks.push(tok);
-
-         toks_meta.push(TokMeta {
-            span,
-            pos,
-            line,
-            col,
-         });
-
-         if after_new_line {
-            line += 1;
-            col = 1;
-         }
-
-         pos += span;
-         col += span;
-      } else {
-         panic!("Unrecognized token at line: {}, col: {}", line, col);
+      Tokenizer {
+         toks,
+         toks_meta,
+         after_new_line,
+         pos,
+         line,
+         col,
+         peeker,
       }
    }
 
-   (toks, toks_meta)
+   fn tokenize(mut self) -> (Vec<Tok>, Vec<TokMeta>) {
+      while self.peeker.has_more() {
+         if let Some(span) = space(&mut self.peeker) {
+            if self.after_new_line {
+               assert!(span % INDENT == 0);
+               let indents = span / INDENT;
+               for _ in 0..indents {
+                  self.pos += INDENT;
+                  self.col += INDENT;
+
+                  self.toks.push(Tok::Indent);
+
+                  self.toks_meta.push(TokMeta {
+                     span: INDENT,
+                     pos: self.pos,
+                     line: self.line,
+                     col: self.col,
+                  });
+               }
+            } else {
+               self.pos += span;
+               self.col += span;
+            }
+         }
+
+         if let Some((tok, span)) = match_tok(&mut self.peeker) {
+            self.after_new_line = tok == Tok::NewLine;
+
+            self.toks.push(tok);
+
+            self.toks_meta.push(TokMeta {
+               span: span,
+               pos: self.pos,
+               line: self.line,
+               col: self.col,
+            });
+
+            if self.after_new_line {
+               self.line += 1;
+               self.col = 1;
+            }
+
+            self.pos += span;
+            self.col += span;
+         } else {
+            panic!(
+               "Unrecognized token at line: {}, col: {}",
+               self.line, self.col
+            );
+         }
+      }
+
+      let Self {
+         toks, toks_meta, ..
+      } = self;
+
+      (toks, toks_meta)
+   }
 }
 
 fn match_tok(peeker: &mut StrPeeker) -> TokMatch {
