@@ -51,6 +51,13 @@ pub enum Tok {
    In,
 }
 
+pub struct TokMeta {
+   pub span: usize,
+   pub pos: usize,
+   pub line: usize,
+   pub col: usize,
+}
+
 const KEYWORDS: [(&[char], Tok); 13] = [
    (&['f', 'n'], Tok::Fn),
    (&['l', 'o', 'o', 'p'], Tok::Loop),
@@ -66,14 +73,6 @@ const KEYWORDS: [(&[char], Tok); 13] = [
    (&['o', 'r'], Tok::Or),
    (&['n', 'o', 't'], Tok::Not),
 ];
-
-pub struct Token {
-   pub tok: Tok,
-   pub span: usize,
-   pub pos: usize,
-   pub line: usize,
-   pub col: usize,
-}
 
 type TokMatch = Option<(Tok, usize)>;
 
@@ -334,10 +333,11 @@ const MATCHERS: [fn(peeker: &mut StrPeeker) -> TokMatch; 33] = [
    string,
 ];
 
-pub fn tokenize(input: &str) -> Vec<Token> {
+pub fn tokenize(input: &str) -> (Vec<Tok>, Vec<TokMeta>) {
    let chars: Vec<_> = input.chars().collect();
 
-   let mut tokens = vec![];
+   let mut toks = vec![];
+   let mut toks_meta = vec![];
 
    let mut after_new_line = true;
 
@@ -355,8 +355,10 @@ pub fn tokenize(input: &str) -> Vec<Token> {
             for _ in 0..indents {
                pos += INDENT;
                col += INDENT;
-               tokens.push(Token {
-                  tok: Tok::Indent,
+
+               toks.push(Tok::Indent);
+
+               toks_meta.push(TokMeta {
                   span: INDENT,
                   pos,
                   line,
@@ -372,8 +374,9 @@ pub fn tokenize(input: &str) -> Vec<Token> {
       if let Some((tok, span)) = match_tok(&mut peeker) {
          after_new_line = tok == Tok::NewLine;
 
-         tokens.push(Token {
-            tok,
+         toks.push(tok);
+
+         toks_meta.push(TokMeta {
             span,
             pos,
             line,
@@ -392,7 +395,7 @@ pub fn tokenize(input: &str) -> Vec<Token> {
       }
    }
 
-   tokens
+   (toks, toks_meta)
 }
 
 fn match_tok(peeker: &mut StrPeeker) -> TokMatch {

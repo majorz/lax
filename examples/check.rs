@@ -5,12 +5,7 @@ use nel::tokenize::*;
 fn main() {
    let string = "(100.0 + 4) * 0.2 - 0.6";
 
-   let tokens = tokenize(string);
-
-   let toks = tokens
-      .iter()
-      .map(|token| token.tok.clone())
-      .collect::<Vec<_>>();
+   let (toks, _) = tokenize(string);
 
    let mut peeker = Peeker::new(&toks);
 
