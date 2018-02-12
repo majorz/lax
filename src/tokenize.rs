@@ -25,6 +25,7 @@ pub enum Tok {
    Not,
    VerticalBar,
    Colon,
+   Caret,
    ParenLeft,
    ParenRight,
    SquareBracketLeft,
@@ -37,18 +38,7 @@ pub enum Tok {
    Accent,
    String,
    Identifier,
-   Symbol,
    Digits,
-   Fn,
-   Loop,
-   Match,
-   If,
-   Ef,
-   El,
-   Break,
-   Ret,
-   For,
-   In,
 }
 
 pub struct TokMeta {
@@ -57,22 +47,6 @@ pub struct TokMeta {
    pub line: usize,
    pub col: usize,
 }
-
-const KEYWORDS: [(&[char], Tok); 13] = [
-   (&['f', 'n'], Tok::Fn),
-   (&['l', 'o', 'o', 'p'], Tok::Loop),
-   (&['m', 'a', 't', 'c', 'h'], Tok::Match),
-   (&['i', 'f'], Tok::If),
-   (&['e', 'f'], Tok::Ef),
-   (&['e', 'l'], Tok::El),
-   (&['b', 'r', 'e', 'a', 'k'], Tok::Break),
-   (&['r', 'e', 't'], Tok::Ret),
-   (&['f', 'o', 'r'], Tok::For),
-   (&['i', 'n'], Tok::In),
-   (&['a', 'n', 'd'], Tok::And),
-   (&['o', 'r'], Tok::Or),
-   (&['n', 'o', 't'], Tok::Not),
-];
 
 type TokMatch = Option<(Tok, usize)>;
 
@@ -97,12 +71,10 @@ impl<'s> StrPeeker<'s> {
       span
    }
 
-   fn has_more(&mut self) -> bool {
-      !self.peek.is_empty()
-   }
+   fn is_empty(&self) -> bool {
+      debug_assert!(self.peek.len() == self.input.len());
 
-   fn has_at_least(&mut self, span: usize) -> bool {
-      self.peek.len() >= span
+      self.input.is_empty()
    }
 
    fn exact(&mut self, front: &[char]) -> Option<()> {
@@ -170,10 +142,6 @@ impl<'s> StrPeeker<'s> {
 
       self.peek = &self.peek[span..];
    }
-
-   fn reveal<'p>(&'p self) -> &'s [char] {
-      &self.input[..self.input.len() - self.peek.len()]
-   }
 }
 
 fn space(peeker: &mut StrPeeker) -> Option<usize> {
@@ -183,7 +151,7 @@ fn space(peeker: &mut StrPeeker) -> Option<usize> {
 }
 
 fn string(peeker: &mut StrPeeker) -> TokMatch {
-   debug_assert!(peeker.has_more());
+   debug_assert!(!peeker.is_empty());
 
    peeker.require(|c| c == '\'')?;
 
@@ -204,51 +172,16 @@ fn string(peeker: &mut StrPeeker) -> TokMatch {
    Some((Tok::String, peeker.commit()))
 }
 
-fn symbol(peeker: &mut StrPeeker) -> TokMatch {
-   debug_assert!(peeker.has_more());
-
-   if !peeker.has_at_least(2) {
-      return None;
-   }
-
-   peeker.require(|c| c == '^')?;
-
-   advance_identifier(peeker)?;
-
-   if Tok::Identifier == tok_from_identifier(&peeker.reveal()[1..]) {
-      Some((Tok::Symbol, peeker.commit()))
-   } else {
-      None
-   }
-}
-
 fn identifier(peeker: &mut StrPeeker) -> TokMatch {
-   debug_assert!(peeker.has_more());
+   debug_assert!(!peeker.is_empty());
 
-   advance_identifier(peeker)?;
-
-   let tok = tok_from_identifier(peeker.reveal());
-   Some((tok, peeker.commit()))
-}
-
-fn advance_identifier(peeker: &mut StrPeeker) -> Option<()> {
    peeker.require(|c| (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '_')?;
 
    peeker.any(|c| {
       (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '_'
    });
 
-   Some(())
-}
-
-fn tok_from_identifier(identifier: &[char]) -> Tok {
-   for &(keyword, ref tok) in &KEYWORDS {
-      if keyword == identifier {
-         return (*tok).clone();
-      }
-   }
-
-   Tok::Identifier
+   Some((Tok::Identifier, peeker.commit()))
 }
 
 fn digits(peeker: &mut StrPeeker) -> TokMatch {
@@ -260,7 +193,7 @@ fn digits(peeker: &mut StrPeeker) -> TokMatch {
 macro_rules! exact {
    ($string:expr, $func:ident, $token_type:expr) => {
       fn $func(peeker: &mut StrPeeker) -> TokMatch {
-         debug_assert!(peeker.has_more());
+         debug_assert!(!peeker.is_empty());
          peeker.exact($string)?;
          Some(($token_type, peeker.commit()))
       }
@@ -288,6 +221,7 @@ exact!(&['*'], asterisk, Tok::Asterisk);
 exact!(&['/'], slash, Tok::Slash);
 exact!(&['|'], vertical_bar, Tok::VerticalBar);
 exact!(&[':'], colon, Tok::Colon);
+exact!(&['^'], caret, Tok::Caret);
 exact!(&['('], paren_left, Tok::ParenLeft);
 exact!(&[')'], paren_right, Tok::ParenRight);
 exact!(&['['], square_bracket_left, Tok::SquareBracketLeft);
@@ -318,6 +252,7 @@ const MATCHERS: [fn(peeker: &mut StrPeeker) -> TokMatch; 33] = [
    slash,
    vertical_bar,
    colon,
+   caret,
    paren_left,
    paren_right,
    square_bracket_left,
@@ -329,7 +264,6 @@ const MATCHERS: [fn(peeker: &mut StrPeeker) -> TokMatch; 33] = [
    identifier,
    digits,
    full_stop,
-   symbol,
    string,
 ];
 
@@ -374,29 +308,8 @@ impl<'s> Tokenizer<'s> {
    }
 
    fn tokenize(mut self) -> (Vec<Tok>, Vec<TokMeta>) {
-      while self.peeker.has_more() {
-         if let Some(span) = space(&mut self.peeker) {
-            if self.after_new_line {
-               assert!(span % INDENT == 0);
-               let indents = span / INDENT;
-               for _ in 0..indents {
-                  self.pos += INDENT;
-                  self.col += INDENT;
-
-                  self.toks.push(Tok::Indent);
-
-                  self.toks_meta.push(TokMeta {
-                     span: INDENT,
-                     pos: self.pos,
-                     line: self.line,
-                     col: self.col,
-                  });
-               }
-            } else {
-               self.pos += span;
-               self.col += span;
-            }
-         }
+      while !self.peeker.is_empty() {
+         self.indent_spaces();
 
          if let Some((tok, span)) = match_tok(&mut self.peeker) {
             self.after_new_line = tok == Tok::NewLine;
@@ -430,6 +343,31 @@ impl<'s> Tokenizer<'s> {
       } = self;
 
       (toks, toks_meta)
+   }
+
+   fn indent_spaces(&mut self) {
+      if let Some(span) = space(&mut self.peeker) {
+         if self.after_new_line {
+            assert!(span % INDENT == 0);
+            let indents = span / INDENT;
+            for _ in 0..indents {
+               self.pos += INDENT;
+               self.col += INDENT;
+
+               self.toks.push(Tok::Indent);
+
+               self.toks_meta.push(TokMeta {
+                  span: INDENT,
+                  pos: self.pos,
+                  line: self.line,
+                  col: self.col,
+               });
+            }
+         } else {
+            self.pos += span;
+            self.col += span;
+         }
+      }
    }
 }
 
@@ -518,35 +456,6 @@ mod tests {
    }
 
    #[test]
-   fn test_symbol() {
-      m!(symbol, "-");
-      m!(symbol, "-^name");
-      m!(symbol, "^012abc");
-      m!(symbol, "^");
-      m!(symbol, "^-");
-      m!(symbol, "^Я");
-      m!(symbol, "^for");
-      m!(symbol, "^_", Tok::Symbol, 2);
-      m!(symbol, "^__", Tok::Symbol, 3);
-      m!(symbol, "^_.", Tok::Symbol, 2);
-      m!(symbol, "^_name", Tok::Symbol, 6);
-      m!(symbol, "^name", Tok::Symbol, 5);
-      m!(symbol, "^_NAME.", Tok::Symbol, 6);
-      m!(symbol, "^NAME.", Tok::Symbol, 5);
-      m!(symbol, "^a100", Tok::Symbol, 5);
-      m!(symbol, "^a100.", Tok::Symbol, 5);
-      m!(symbol, "^a_a_a.", Tok::Symbol, 6);
-      m!(symbol, "^aЯ", Tok::Symbol, 2);
-   }
-
-   #[test]
-   #[should_panic]
-   #[cfg(debug_assertions)]
-   fn test_symbol_empty() {
-      e!(symbol);
-   }
-
-   #[test]
    fn test_identifier() {
       m!(identifier, "-");
       m!(identifier, "-name");
@@ -569,26 +478,6 @@ mod tests {
    #[cfg(debug_assertions)]
    fn test_identifier_empty() {
       e!(identifier);
-   }
-
-   #[test]
-   fn test_keyword() {
-      m!(identifier, "fn", Tok::Fn, 2);
-      m!(identifier, "loop", Tok::Loop, 4);
-      m!(identifier, "match", Tok::Match, 5);
-      m!(identifier, "if", Tok::If, 2);
-      m!(identifier, "ef", Tok::Ef, 2);
-      m!(identifier, "el", Tok::El, 2);
-      m!(identifier, "break", Tok::Break, 5);
-      m!(identifier, "ret", Tok::Ret, 3);
-      m!(identifier, "for", Tok::For, 3);
-      m!(identifier, "in", Tok::In, 2);
-      m!(identifier, "and", Tok::And, 3);
-      m!(identifier, "or", Tok::Or, 2);
-      m!(identifier, "not", Tok::Not, 3);
-      m!(identifier, "for", Tok::For, 3);
-      m!(identifier, "break_", Tok::Identifier, 6);
-      m!(identifier, "ret100", Tok::Identifier, 6);
    }
 
    #[test]
