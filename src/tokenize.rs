@@ -20,9 +20,6 @@ pub enum Tok {
    Minus,
    Asterisk,
    Slash,
-   And,
-   Or,
-   Not,
    VerticalBar,
    Colon,
    Caret,
@@ -35,8 +32,8 @@ pub enum Tok {
    CurlyBracketLeft,
    CurlyBracketRight,
    Comment,
-   Accent,
-   String,
+   Apostrophe,
+   Text,
    Identifier,
    Digits,
 }
@@ -150,28 +147,6 @@ fn space(peeker: &mut StrPeeker) -> Option<usize> {
    Some(peeker.commit())
 }
 
-fn string(peeker: &mut StrPeeker) -> TokMatch {
-   debug_assert!(!peeker.is_empty());
-
-   peeker.require(|c| c == '\'')?;
-
-   loop {
-      match peeker.next()? {
-         '\\' => {
-            peeker.require(|c| {
-               c == 'n' || c == '\'' || c == '\\' || c == 'r' || c == 't' || c == '0'
-            })?;
-         }
-         '\'' => {
-            break;
-         }
-         _ => {}
-      }
-   }
-
-   Some((Tok::String, peeker.commit()))
-}
-
 fn identifier(peeker: &mut StrPeeker) -> TokMatch {
    debug_assert!(!peeker.is_empty());
 
@@ -231,7 +206,7 @@ exact!(&['>'], greater_than, Tok::GreaterThan);
 exact!(&['{'], curly_bracket_left, Tok::CurlyBracketLeft);
 exact!(&['}'], curly_backet_right, Tok::CurlyBracketRight);
 
-const MATCHERS: [fn(peeker: &mut StrPeeker) -> TokMatch; 33] = [
+const MATCHERS: [fn(peeker: &mut StrPeeker) -> TokMatch; 32] = [
    new_line_n,
    new_line_rn,
    new_line_r,
@@ -264,13 +239,14 @@ const MATCHERS: [fn(peeker: &mut StrPeeker) -> TokMatch; 33] = [
    identifier,
    digits,
    full_stop,
-   string,
 ];
 
 pub fn tokenize(input: &str) -> (Vec<Tok>, Vec<TokMeta>) {
    let chars: Vec<_> = input.chars().collect();
 
-   Tokenizer::new(&chars).tokenize()
+   let mut tokenizer = Tokenizer::new(&chars);
+   tokenizer.tokenize();
+   tokenizer.result()
 }
 
 struct Tokenizer<'s> {
@@ -307,29 +283,46 @@ impl<'s> Tokenizer<'s> {
       }
    }
 
-   fn tokenize(mut self) -> (Vec<Tok>, Vec<TokMeta>) {
+   fn result(self) -> (Vec<Tok>, Vec<TokMeta>) {
+      let Self {
+         toks, toks_meta, ..
+      } = self;
+
+      (toks, toks_meta)
+   }
+
+   fn push(&mut self, tok: Tok, span: usize) {
+      self.toks.push(tok);
+
+      self.toks_meta.push(TokMeta {
+         span: span,
+         pos: self.pos,
+         line: self.line,
+         col: self.col,
+      });
+
+      self.col += span;
+      self.pos += span;
+   }
+
+   fn tokenize(&mut self) {
       while !self.peeker.is_empty() {
          self.indent_spaces();
+
+         if self.string().is_some() {
+            self.after_new_line = false;
+            continue;
+         }
 
          if let Some((tok, span)) = match_tok(&mut self.peeker) {
             self.after_new_line = tok == Tok::NewLine;
 
-            self.toks.push(tok);
-
-            self.toks_meta.push(TokMeta {
-               span: span,
-               pos: self.pos,
-               line: self.line,
-               col: self.col,
-            });
+            self.push(tok, span);
 
             if self.after_new_line {
                self.line += 1;
                self.col = 1;
             }
-
-            self.pos += span;
-            self.col += span;
          } else {
             panic!(
                "Unrecognized token at line: {}, col: {}",
@@ -337,12 +330,6 @@ impl<'s> Tokenizer<'s> {
             );
          }
       }
-
-      let Self {
-         toks, toks_meta, ..
-      } = self;
-
-      (toks, toks_meta)
    }
 
    fn indent_spaces(&mut self) {
@@ -351,17 +338,7 @@ impl<'s> Tokenizer<'s> {
             assert!(span % INDENT == 0);
             let indents = span / INDENT;
             for _ in 0..indents {
-               self.pos += INDENT;
-               self.col += INDENT;
-
-               self.toks.push(Tok::Indent);
-
-               self.toks_meta.push(TokMeta {
-                  span: INDENT,
-                  pos: self.pos,
-                  line: self.line,
-                  col: self.col,
-               });
+               self.push(Tok::Indent, INDENT);
             }
          } else {
             self.pos += span;
@@ -369,10 +346,54 @@ impl<'s> Tokenizer<'s> {
          }
       }
    }
+
+   fn string(&mut self) -> Option<()> {
+      self.peeker.require(|c| c == '\'')?;
+
+      self.push(Tok::Apostrophe, 1);
+
+      let mut span = 0;
+      loop {
+         match self.peeker.next()? {
+            '\\' => {
+               self.peeker.require(|c| {
+                  c == 'n' || c == '\'' || c == '\\' || c == 'r' || c == 't' || c == '0'
+               })?;
+
+               span += 1;
+            }
+            '\'' => {
+               break;
+            }
+            '\n' | '\r' => {
+               self.pos += span;
+               self.col += span;
+
+               panic!(
+                  "New line in string at line: {}, col: {}",
+                  self.line, self.col
+               );
+            }
+            _ => {}
+         }
+
+         span += 1;
+      }
+
+      if span != 0 {
+         self.push(Tok::Text, span);
+      }
+
+      self.push(Tok::Apostrophe, 1);
+
+      self.peeker.commit();
+
+      Some(())
+   }
 }
 
 fn match_tok(peeker: &mut StrPeeker) -> TokMatch {
-   for matcher in MATCHERS.iter() {
+   for matcher in &MATCHERS {
       if let Some((tok, span)) = matcher(peeker) {
          return Some((tok, span));
       }
@@ -422,6 +443,36 @@ mod tests {
       ($matcher:ident) => (
          $matcher(&mut StrPeeker::new(&[]));
       )
+   }
+
+   macro_rules! string {
+      ($input:expr) => (
+         let chars = as_chars($input);
+         let mut tokenizer = Tokenizer::new(&chars);
+         assert!(tokenizer.string().is_none());
+      );
+
+      ($input:expr, $span:expr) => (
+         let chars = as_chars($input);
+         let mut tokenizer = Tokenizer::new(&chars);
+         assert!(tokenizer.string().is_some());
+         let (toks, toks_meta) = tokenizer.result();
+         if $span == 0 {
+            assert!(toks.len() == 2);
+            assert_eq!(toks[0], Tok::Apostrophe);
+            assert_eq!(toks[1], Tok::Apostrophe);
+            assert_eq!(toks_meta[0].span, 1);
+            assert_eq!(toks_meta[1].span, 1);
+         } else {
+            assert!(toks.len() == 3);
+            assert_eq!(toks[0], Tok::Apostrophe);
+            assert_eq!(toks[1], Tok::Text);
+            assert_eq!(toks[2], Tok::Apostrophe);
+            assert_eq!(toks_meta[0].span, 1);
+            assert_eq!(toks_meta[1].span, $span);
+            assert_eq!(toks_meta[2].span, 1);
+         }
+      );
    }
 
    #[test]
@@ -493,42 +544,29 @@ mod tests {
 
    #[test]
    fn test_string() {
-      m!(string, "-");
-      m!(string, "-''");
-      m!(string, "'");
-      m!(string, "'a");
-      m!(string, "'ЯaЯaЯ");
-      m!(string, "'a\\'");
-      m!(string, "'a\\ '");
-      m!(string, "'aaa\\abbb'");
-      m!(string, "'aaa\\\"bbb'");
-      m!(string, "''", Tok::String, 2);
-      m!(string, "'a'", Tok::String, 3);
-      m!(string, "'Я'", Tok::String, 3);
-      m!(string, "'y̆'", Tok::String, 4);
-      m!(string, "'ЯaЯaЯ'", Tok::String, 7);
-      m!(string, "'''", Tok::String, 2);
-      m!(string, "'aaa bbb'", Tok::String, 9);
-      m!(string, "'aaa bbb' ", Tok::String, 9);
-      m!(string, "'aaa bbb'ccc", Tok::String, 9);
-      m!(string, "'aaa\nbbb\nccc'", Tok::String, 13);
-      m!(string, "'aaa\nbbb\nccc'\n", Tok::String, 13);
-      m!(string, "'aaa\nbbb\nccc'", Tok::String, 13);
-      m!(string, "'aaa\r\nbbb\r\nccc'", Tok::String, 15);
-      m!(string, "'aaa\r\nbbb\r\nccc'\r\n", Tok::String, 15);
-      m!(string, "'aaa\r\nbbb\r\nccc'", Tok::String, 15);
-      m!(string, "'aaa\\nbbb'", Tok::String, 10);
-      m!(string, "'aaa\\rbbb'", Tok::String, 10);
-      m!(string, "'aaa\\tbbb'", Tok::String, 10);
-      m!(string, "'aaa\\\\bbb'", Tok::String, 10);
-      m!(string, "'aaa\\\'bbb'", Tok::String, 10);
-      m!(string, "'aaa\\0bbb'", Tok::String, 10);
-   }
-
-   #[test]
-   #[should_panic]
-   #[cfg(debug_assertions)]
-   fn test_string_empty() {
-      e!(string);
+      string!("-");
+      string!("-''");
+      string!("'");
+      string!("'a");
+      string!("'ЯaЯaЯ");
+      string!("'a\\'");
+      string!("'a\\ '");
+      string!("'aaa\\abbb'");
+      string!("'aaa\\\"bbb'");
+      string!("''", 0);
+      string!("'a'", 1);
+      string!("'Я'", 1);
+      string!("'y̆'", 2);
+      string!("'ЯaЯaЯ'", 5);
+      string!("'''", 0);
+      string!("'aaa bbb'", 7);
+      string!("'aaa bbb' ", 7);
+      string!("'aaa bbb'ccc", 7);
+      string!("'aaa\\nbbb'", 8);
+      string!("'aaa\\rbbb'", 8);
+      string!("'aaa\\tbbb'", 8);
+      string!("'aaa\\\\bbb'", 8);
+      string!("'aaa\\\'bbb'", 8);
+      string!("'aaa\\0bbb'", 8);
    }
 }
