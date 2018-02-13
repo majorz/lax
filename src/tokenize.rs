@@ -1,8 +1,7 @@
-const INDENT: usize = 3;
-
 #[derive(Debug, Clone, PartialEq)]
 pub enum Tok {
    Indent,
+   Space,
    NewLine,
    DoubleAsterisk,
    DoubleEquals,
@@ -141,10 +140,10 @@ impl<'s> StrPeeker<'s> {
    }
 }
 
-fn space(peeker: &mut StrPeeker) -> Option<usize> {
+fn space(peeker: &mut StrPeeker) -> TokMatch {
    peeker.multiple(|c| c == ' ')?;
 
-   Some(peeker.commit())
+   Some((Tok::Space, peeker.commit()))
 }
 
 fn identifier(peeker: &mut StrPeeker) -> TokMatch {
@@ -206,7 +205,8 @@ exact!(&['>'], greater_than, Tok::GreaterThan);
 exact!(&['{'], curly_bracket_left, Tok::CurlyBracketLeft);
 exact!(&['}'], curly_backet_right, Tok::CurlyBracketRight);
 
-const MATCHERS: [fn(peeker: &mut StrPeeker) -> TokMatch; 32] = [
+const MATCHERS: &[fn(peeker: &mut StrPeeker) -> TokMatch] = &[
+   space,
    new_line_n,
    new_line_rn,
    new_line_r,
@@ -307,8 +307,6 @@ impl<'s> Tokenizer<'s> {
 
    fn tokenize(&mut self) {
       while !self.peeker.is_empty() {
-         self.indent_spaces();
-
          if self.string().is_some() {
             self.after_new_line = false;
             continue;
@@ -328,21 +326,6 @@ impl<'s> Tokenizer<'s> {
                "Unrecognized token at line: {}, col: {}",
                self.line, self.col
             );
-         }
-      }
-   }
-
-   fn indent_spaces(&mut self) {
-      if let Some(span) = space(&mut self.peeker) {
-         if self.after_new_line {
-            assert!(span % INDENT == 0);
-            let indents = span / INDENT;
-            for _ in 0..indents {
-               self.push(Tok::Indent, INDENT);
-            }
-         } else {
-            self.pos += span;
-            self.col += span;
          }
       }
    }
@@ -393,7 +376,7 @@ impl<'s> Tokenizer<'s> {
 }
 
 fn match_tok(peeker: &mut StrPeeker) -> TokMatch {
-   for matcher in &MATCHERS {
+   for matcher in MATCHERS {
       if let Some((tok, span)) = matcher(peeker) {
          return Some((tok, span));
       }
@@ -421,20 +404,6 @@ mod tests {
          let chars = as_chars($input);
          let mut peeker = StrPeeker::new(&chars);
          assert_eq!($matcher(&mut peeker), Some(($tok, $span)));
-      );
-   }
-
-   macro_rules! space {
-      ($input:expr) => (
-         let chars = as_chars($input);
-         let mut peeker = StrPeeker::new(&chars);
-         assert_eq!(space(&mut peeker), None);
-      );
-
-      ($input:expr, $span:expr) => (
-         let chars = as_chars($input);
-         let mut peeker = StrPeeker::new(&chars);
-         assert_eq!(space(&mut peeker), Some($span));
       );
    }
 
@@ -497,13 +466,13 @@ mod tests {
 
    #[test]
    fn test_space() {
-      space!("");
-      space!("-");
-      space!("- ");
-      space!(" ", 1);
-      space!(" -", 1);
-      space!("   ", 3);
-      space!("   -", 3);
+      m!(space, "");
+      m!(space, "-");
+      m!(space, "- ");
+      m!(space, " ", Tok::Space, 1);
+      m!(space, " -", Tok::Space, 1);
+      m!(space, "   ", Tok::Space, 3);
+      m!(space, "   -", Tok::Space, 3);
    }
 
    #[test]
