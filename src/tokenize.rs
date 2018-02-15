@@ -245,9 +245,7 @@ const MATCHERS: &[fn(peeker: &mut StrPeeker) -> TokMatch] = &[
 pub fn tokenize(input: &str) -> (Vec<Tok>, Vec<TokMeta>) {
    let chars: Vec<_> = input.chars().collect();
 
-   let mut tokenizer = Tokenizer::new(&chars);
-   tokenizer.tokenize();
-   tokenizer.result()
+   Tokenizer::new(&chars).tokenize().destructure()
 }
 
 struct Tokenizer<'s> {
@@ -284,7 +282,7 @@ impl<'s> Tokenizer<'s> {
       }
    }
 
-   fn result(self) -> (Vec<Tok>, Vec<TokMeta>) {
+   fn destructure(self) -> (Vec<Tok>, Vec<TokMeta>) {
       let Self {
          toks, toks_meta, ..
       } = self;
@@ -306,7 +304,7 @@ impl<'s> Tokenizer<'s> {
       self.pos += span;
    }
 
-   fn tokenize(&mut self) {
+   fn tokenize(mut self) -> Self {
       while !self.peeker.is_empty() {
          if self.string().is_some() {
             self.after_new_line = false;
@@ -329,6 +327,8 @@ impl<'s> Tokenizer<'s> {
             );
          }
       }
+
+      self
    }
 
    fn string(&mut self) -> Option<()> {
@@ -426,7 +426,7 @@ mod tests {
          let chars = as_chars($input);
          let mut tokenizer = Tokenizer::new(&chars);
          assert!(tokenizer.string().is_some());
-         let (toks, toks_meta) = tokenizer.result();
+         let (toks, toks_meta) = tokenizer.destructure();
          if $span == 0 {
             assert!(toks.len() == 2);
             assert_eq!(toks[0], Tok::Apostrophe);
