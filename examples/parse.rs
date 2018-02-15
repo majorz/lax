@@ -4,6 +4,7 @@ use std::fs::File;
 use std::io::prelude::*;
 
 use nel::tokenize::tokenize;
+use nel::indentation::calc_indentation;
 //use nel::parse::Parser;
 
 fn main() {
@@ -13,7 +14,12 @@ fn main() {
    f.read_to_string(&mut input)
       .expect("something went wrong reading the file");
 
-   let _ = tokenize(&input);
+   let (toks, toks_meta) = tokenize(&input);
+
+   match calc_indentation(&toks, &toks_meta) {
+      Some(indentation) => println!("Indentation is {} spaces", indentation),
+      None => println!("No indentation used"),
+   }
 
    /*
    for (i, token) in tokens.iter().enumerate() {

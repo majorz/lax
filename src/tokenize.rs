@@ -37,6 +37,7 @@ pub enum Tok {
    Digits,
 }
 
+#[derive(Debug, Clone, PartialEq)]
 pub struct TokMeta {
    pub span: usize,
    pub pos: usize,
@@ -246,23 +247,7 @@ pub fn tokenize(input: &str) -> (Vec<Tok>, Vec<TokMeta>) {
 
    let mut tokenizer = Tokenizer::new(&chars);
    tokenizer.tokenize();
-   let (toks, toks_meta) = tokenizer.result();
-
-   indented_tokens(&toks, &toks_meta);
-
-   (toks, toks_meta)
-}
-
-pub fn indented_tokens(toks: &[Tok], toks_meta: &[TokMeta]) {
-   let mut after_new_line = true;
-
-   for (tok, tok_meta) in toks.iter().zip(toks_meta.iter()) {
-      if after_new_line && tok == &Tok::Space {
-         println!("{}", tok_meta.span);
-      }
-
-      after_new_line = tok == &Tok::NewLine;
-   }
+   tokenizer.result()
 }
 
 struct Tokenizer<'s> {
