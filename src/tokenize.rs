@@ -48,30 +48,30 @@ pub struct TokMeta {
 type TokMatch = Option<(Tok, usize)>;
 
 pub struct StrPeeker<'s> {
-   input: &'s [char],
+   chars: &'s [char],
    peek: &'s [char],
 }
 
 impl<'s> StrPeeker<'s> {
-   fn new(input: &'s [char]) -> Self {
+   fn new(chars: &'s [char]) -> Self {
       StrPeeker {
-         input: input,
-         peek: input,
+         chars: chars,
+         peek: chars,
       }
    }
 
    fn commit(&mut self) -> usize {
-      debug_assert!(self.peek.len() != self.input.len());
+      debug_assert!(self.peek.len() != self.chars.len());
 
-      let span = self.input.len() - self.peek.len();
-      self.input = self.peek;
+      let span = self.chars.len() - self.peek.len();
+      self.chars = self.peek;
       span
    }
 
    fn is_empty(&self) -> bool {
-      debug_assert!(self.peek.len() == self.input.len());
+      debug_assert!(self.peek.len() == self.chars.len());
 
-      self.input.is_empty()
+      self.chars.is_empty()
    }
 
    fn exact(&mut self, front: &[char]) -> Option<()> {
@@ -80,14 +80,14 @@ impl<'s> StrPeeker<'s> {
          self.peek = &self.peek[span..];
          Some(())
       } else {
-         self.peek = self.input;
+         self.peek = self.chars;
          None
       }
    }
 
    fn require(&mut self, f: fn(char) -> bool) -> Option<()> {
       if self.peek.is_empty() {
-         self.peek = self.input;
+         self.peek = self.chars;
       }
 
       let ch = self.peek[0];
@@ -95,7 +95,7 @@ impl<'s> StrPeeker<'s> {
          self.peek = &self.peek[1..];
          Some(())
       } else {
-         self.peek = self.input;
+         self.peek = self.chars;
          None
       }
    }
@@ -105,7 +105,7 @@ impl<'s> StrPeeker<'s> {
          self.peek = &self.peek[1..];
          Some(*ch)
       } else {
-         self.peek = self.input;
+         self.peek = self.chars;
          None
       }
    }
@@ -123,7 +123,7 @@ impl<'s> StrPeeker<'s> {
          self.peek = &self.peek[span..];
          Some(())
       } else {
-         self.peek = self.input;
+         self.peek = self.chars;
          None
       }
    }
@@ -242,10 +242,8 @@ const MATCHERS: &[fn(peeker: &mut StrPeeker) -> TokMatch] = &[
    full_stop,
 ];
 
-pub fn tokenize(input: &str) -> (Vec<Tok>, Vec<TokMeta>) {
-   let chars: Vec<_> = input.chars().collect();
-
-   Tokenizer::new(&chars).tokenize().destructure()
+pub fn tokenize(chars: &[char]) -> (Vec<Tok>, Vec<TokMeta>) {
+   Tokenizer::new(chars).tokenize().destructure()
 }
 
 struct Tokenizer<'s> {
@@ -390,8 +388,8 @@ fn match_tok(peeker: &mut StrPeeker) -> TokMatch {
 mod tests {
    use super::*;
 
-   fn as_chars(input: &str) -> Vec<char> {
-      input.chars().collect()
+   fn as_chars(source: &str) -> Vec<char> {
+      source.chars().collect()
    }
 
    macro_rules! m {

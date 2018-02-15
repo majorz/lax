@@ -3,9 +3,11 @@ extern crate nel;
 use nel::tokenize::*;
 
 fn main() {
-   let string = "(100.0+4)*0.2-0.6";
+   let source = "(100.0+4)*0.2-0.6";
 
-   let (toks, _) = tokenize(string);
+   let chars: Vec<_> = source.chars().collect();
+
+   let (toks, _) = tokenize(&chars);
 
    let mut peeker = Peeker::new(&toks);
 

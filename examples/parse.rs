@@ -10,11 +10,13 @@ use nel::indentation::estimate_indentation;
 fn main() {
    let mut f = File::open("nel/tokenize.nel").expect("file not found");
 
-   let mut input = String::new();
-   f.read_to_string(&mut input)
+   let mut source = String::new();
+   f.read_to_string(&mut source)
       .expect("something went wrong reading the file");
 
-   let (toks, toks_meta) = tokenize(&input);
+   let chars: Vec<_> = source.chars().collect();
+
+   let (toks, toks_meta) = tokenize(&chars);
 
    match estimate_indentation(&toks, &toks_meta) {
       Some(indentation) => println!("Indentation is {} spaces", indentation),

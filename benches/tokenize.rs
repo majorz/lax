@@ -31,7 +31,9 @@ fn tokenize_benchmark(c: &mut Criterion) {
    let lines = input.matches('\n').count();
    println!("{} lines/{} kb", lines, input.len() / 1024);
 
-   c.bench_function("tokenize", |b| b.iter(|| tokenize(&input)));
+   let chars: Vec<_> = input.chars().collect();
+
+   c.bench_function("tokenize", |b| b.iter(|| tokenize(&chars)));
 }
 
 criterion_group!(tokenize_group, tokenize_benchmark);
