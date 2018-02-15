@@ -4,7 +4,7 @@ use std::fs::File;
 use std::io::prelude::*;
 
 use nel::tokenize::tokenize;
-use nel::indentation::calc_indentation;
+use nel::indentation::estimate_indentation;
 //use nel::parse::Parser;
 
 fn main() {
@@ -16,7 +16,7 @@ fn main() {
 
    let (toks, toks_meta) = tokenize(&input);
 
-   match calc_indentation(&toks, &toks_meta) {
+   match estimate_indentation(&toks, &toks_meta) {
       Some(indentation) => println!("Indentation is {} spaces", indentation),
       None => println!("No indentation used"),
    }
