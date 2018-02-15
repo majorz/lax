@@ -47,20 +47,20 @@ pub struct TokMeta {
 
 type TokMatch = Option<(Tok, usize)>;
 
-pub struct StrPeeker<'s> {
+pub struct Consumer<'s> {
    chars: &'s [char],
    peek: &'s [char],
 }
 
-impl<'s> StrPeeker<'s> {
+impl<'s> Consumer<'s> {
    fn new(chars: &'s [char]) -> Self {
-      StrPeeker {
+      Consumer {
          chars: chars,
          peek: chars,
       }
    }
 
-   fn commit(&mut self) -> usize {
+   fn consume(&mut self) -> usize {
       debug_assert!(self.peek.len() != self.chars.len());
 
       let span = self.chars.len() - self.peek.len();
@@ -110,7 +110,7 @@ impl<'s> StrPeeker<'s> {
       }
    }
 
-   fn multiple(&mut self, f: fn(char) -> bool) -> Option<()> {
+   fn multi(&mut self, f: fn(char) -> bool) -> Option<()> {
       let mut span = 0;
       for ch in self.peek {
          if !f(*ch) {
@@ -141,36 +141,36 @@ impl<'s> StrPeeker<'s> {
    }
 }
 
-fn space(peeker: &mut StrPeeker) -> TokMatch {
-   peeker.multiple(|c| c == ' ')?;
+fn space(consumer: &mut Consumer) -> TokMatch {
+   consumer.multi(|c| c == ' ')?;
 
-   Some((Tok::Space, peeker.commit()))
+   Some((Tok::Space, consumer.consume()))
 }
 
-fn identifier(peeker: &mut StrPeeker) -> TokMatch {
-   debug_assert!(!peeker.is_empty());
+fn identifier(consumer: &mut Consumer) -> TokMatch {
+   debug_assert!(!consumer.is_empty());
 
-   peeker.require(|c| (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '_')?;
+   consumer.require(|c| (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '_')?;
 
-   peeker.any(|c| {
+   consumer.any(|c| {
       (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '_'
    });
 
-   Some((Tok::Identifier, peeker.commit()))
+   Some((Tok::Identifier, consumer.consume()))
 }
 
-fn digits(peeker: &mut StrPeeker) -> TokMatch {
-   peeker.multiple(|c| c >= '0' && c <= '9')?;
+fn digits(consumer: &mut Consumer) -> TokMatch {
+   consumer.multi(|c| c >= '0' && c <= '9')?;
 
-   Some((Tok::Digits, peeker.commit()))
+   Some((Tok::Digits, consumer.consume()))
 }
 
 macro_rules! exact {
    ($string:expr, $func:ident, $token_type:expr) => {
-      fn $func(peeker: &mut StrPeeker) -> TokMatch {
-         debug_assert!(!peeker.is_empty());
-         peeker.exact($string)?;
-         Some(($token_type, peeker.commit()))
+      fn $func(consumer: &mut Consumer) -> TokMatch {
+         debug_assert!(!consumer.is_empty());
+         consumer.exact($string)?;
+         Some(($token_type, consumer.consume()))
       }
    }
 }
@@ -206,7 +206,7 @@ exact!(&['>'], greater_than, Tok::GreaterThan);
 exact!(&['{'], curly_bracket_left, Tok::CurlyBracketLeft);
 exact!(&['}'], curly_backet_right, Tok::CurlyBracketRight);
 
-const MATCHERS: &[fn(peeker: &mut StrPeeker) -> TokMatch] = &[
+const MATCHERS: &[fn(consumer: &mut Consumer) -> TokMatch] = &[
    space,
    new_line_n,
    new_line_rn,
@@ -253,7 +253,7 @@ struct Tokenizer<'s> {
    pos: usize,
    line: usize,
    col: usize,
-   peeker: StrPeeker<'s>,
+   consumer: Consumer<'s>,
 }
 
 impl<'s> Tokenizer<'s> {
@@ -267,7 +267,7 @@ impl<'s> Tokenizer<'s> {
       let line = 1;
       let col = 1;
 
-      let peeker = StrPeeker::new(chars);
+      let consumer = Consumer::new(chars);
 
       Tokenizer {
          toks,
@@ -276,7 +276,7 @@ impl<'s> Tokenizer<'s> {
          pos,
          line,
          col,
-         peeker,
+         consumer,
       }
    }
 
@@ -303,13 +303,13 @@ impl<'s> Tokenizer<'s> {
    }
 
    fn tokenize(mut self) -> Self {
-      while !self.peeker.is_empty() {
+      while !self.consumer.is_empty() {
          if self.string().is_some() {
             self.after_new_line = false;
             continue;
          }
 
-         if let Some((tok, span)) = match_tok(&mut self.peeker) {
+         if let Some((tok, span)) = match_tok(&mut self.consumer) {
             self.after_new_line = tok == Tok::NewLine;
 
             self.push(tok, span);
@@ -330,15 +330,15 @@ impl<'s> Tokenizer<'s> {
    }
 
    fn string(&mut self) -> Option<()> {
-      self.peeker.require(|c| c == '\'')?;
+      self.consumer.require(|c| c == '\'')?;
 
       self.push(Tok::Apostrophe, 1);
 
       let mut span = 0;
       loop {
-         match self.peeker.next()? {
+         match self.consumer.next()? {
             '\\' => {
-               self.peeker.require(|c| {
+               self.consumer.require(|c| {
                   c == 'n' || c == '\'' || c == '\\' || c == 'r' || c == 't' || c == '0'
                })?;
 
@@ -368,15 +368,15 @@ impl<'s> Tokenizer<'s> {
 
       self.push(Tok::Apostrophe, 1);
 
-      self.peeker.commit();
+      self.consumer.consume();
 
       Some(())
    }
 }
 
-fn match_tok(peeker: &mut StrPeeker) -> TokMatch {
+fn match_tok(consumer: &mut Consumer) -> TokMatch {
    for matcher in MATCHERS {
-      if let Some((tok, span)) = matcher(peeker) {
+      if let Some((tok, span)) = matcher(consumer) {
          return Some((tok, span));
       }
    }
@@ -395,21 +395,21 @@ mod tests {
    macro_rules! m {
       ($matcher:ident, $input:expr) => (
          let chars = as_chars($input);
-         let mut peeker = StrPeeker::new(&chars);
-         assert_eq!($matcher(&mut peeker), None);
+         let mut consumer = Consumer::new(&chars);
+         assert_eq!($matcher(&mut consumer), None);
       );
 
       ($matcher:ident, $input:expr, $tok:expr, $span:expr) => (
          let chars = as_chars($input);
-         let mut peeker = StrPeeker::new(&chars);
-         assert_eq!($matcher(&mut peeker), Some(($tok, $span)));
+         let mut consumer = Consumer::new(&chars);
+         assert_eq!($matcher(&mut consumer), Some(($tok, $span)));
       );
    }
 
    #[cfg(debug_assertions)]
    macro_rules! e {
       ($matcher:ident) => (
-         $matcher(&mut StrPeeker::new(&[]));
+         $matcher(&mut Consumer::new(&[]));
       )
    }
 
