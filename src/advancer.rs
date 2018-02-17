@@ -89,3 +89,17 @@ impl<'s> Advancer<'s> {
       self.peek = &self.peek[span..];
    }
 }
+
+#[cfg(test)]
+mod tests {
+   use super::*;
+
+   #[test]
+   #[should_panic]
+   #[cfg(debug_assertions)]
+   fn test_consume_unmoved() {
+      let chars: Vec<_> = "abcd".chars().collect();
+      let mut advancer = Advancer::new(&chars);
+      let _ = advancer.consume();
+   }
+}
