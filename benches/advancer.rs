@@ -8,14 +8,132 @@ use criterion::Criterion;
 use nel::advancer::*;
 
 fn advancer_benchmark(c: &mut Criterion) {
-   let letters: Vec<_> = ('a' as u8..'z' as u8 + 1).map(|u| u as char).collect();
-   let chars: Vec<_> = letters.iter().cycle().take(100_000).map(|c| *c).collect();
+   let long_chars: &[char] = &"aaaaabbbbb"
+      .chars()
+      .cycle()
+      .take(100_000)
+      .collect::<Vec<_>>();
+   let short_chars: &[char] = &"ab".chars().cycle().take(100_000).collect::<Vec<_>>();
 
-   c.bench_function("advancer", |b| b.iter(|| {
-      let mut advancer = Advancer::new(&chars);
-      advancer.zero_or_more(|c| c >= 'a' && c <= 'z');
-      advancer.consume();
-   }));
+   c.bench_function("zero_or_more_1", |b| {
+      b.iter(|| {
+         let mut advancer = Advancer::new(long_chars);
+
+         while !advancer.completed() {
+            for _ in 0..10 {
+               advancer.zero_or_more(|c| c == 'a');
+               advancer.zero_or_more(|c| c == 'b');
+            }
+            advancer.consume();
+         }
+      })
+   });
+
+   c.bench_function("zero_or_more_2", |b| {
+      b.iter(|| {
+         let mut advancer = Advancer2::new(long_chars);
+
+         while !advancer.completed() {
+            for _ in 0..10 {
+               advancer.zero_or_more(|c| c == 'a');
+               advancer.zero_or_more(|c| c == 'b');
+            }
+            advancer.consume();
+         }
+      })
+   });
+
+   c.bench_function("one_or_more_1", |b| {
+      b.iter(|| {
+         let mut advancer = Advancer::new(&long_chars);
+
+         while !advancer.completed() {
+            for _ in 0..10 {
+               advancer.one_or_more(|c| c == 'a').unwrap();
+               advancer.one_or_more(|c| c == 'b').unwrap();
+            }
+            advancer.consume();
+         }
+      })
+   });
+
+   c.bench_function("one_or_more_2", |b| {
+      b.iter(|| {
+         let mut advancer = Advancer2::new(&long_chars);
+
+         while !advancer.completed() {
+            for _ in 0..10 {
+               advancer.one_or_more(|c| c == 'a').unwrap();
+               advancer.one_or_more(|c| c == 'b').unwrap();
+            }
+            advancer.consume();
+         }
+      })
+   });
+
+   c.bench_function("one_1", |b| {
+      b.iter(|| {
+         let mut advancer = Advancer::new(&long_chars);
+
+         while !advancer.completed() {
+            for _ in 0..5 {
+               advancer.one(|c| c == 'a').unwrap();
+            }
+            for _ in 0..5 {
+               advancer.one(|c| c == 'b').unwrap();
+            }
+            advancer.consume();
+         }
+      })
+   });
+
+   c.bench_function("one_2", |b| {
+      b.iter(|| {
+         let mut advancer = Advancer2::new(&long_chars);
+
+         while !advancer.completed() {
+            for _ in 0..5 {
+               advancer.one(|c| c == 'a').unwrap();
+            }
+            for _ in 0..5 {
+               advancer.one(|c| c == 'b').unwrap();
+            }
+            advancer.consume();
+         }
+      })
+   });
+
+   c.bench_function("zero_or_one_1", |b| {
+      b.iter(|| {
+         let mut advancer = Advancer::new(&long_chars);
+
+         while !advancer.completed() {
+            for _ in 0..5 {
+               advancer.zero_or_one(|c| c == 'a').unwrap();
+            }
+            for _ in 0..5 {
+               advancer.zero_or_one(|c| c == 'b').unwrap();
+            }
+            advancer.consume();
+         }
+      })
+   });
+
+   c.bench_function("zero_or_one_2", |b| {
+      b.iter(|| {
+         let mut advancer = Advancer2::new(&long_chars);
+
+         while !advancer.completed() {
+            for _ in 0..5 {
+               advancer.zero_or_one(|c| c == 'a').unwrap();
+            }
+            for _ in 0..5 {
+               advancer.zero_or_one(|c| c == 'b').unwrap();
+            }
+            advancer.consume();
+         }
+      })
+   });
 }
 
 criterion_group!(advancer_group, advancer_benchmark);

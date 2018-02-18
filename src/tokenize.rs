@@ -74,45 +74,54 @@ fn digits(advancer: &mut Advancer) -> TokMatch {
 }
 
 macro_rules! exact {
-   ($string:expr, $func:ident, $token_type:expr) => {
+   ($c1:expr, $func:ident, $token_type:expr) => {
       fn $func(advancer: &mut Advancer) -> TokMatch {
          debug_assert!(!advancer.completed());
-         advancer.exact($string)?;
+         advancer.one(|c| c == $c1)?;
          Some(($token_type, advancer.consume()))
       }
-   }
+   };
+
+   ($c1:expr, $c2:expr, $func:ident, $token_type:expr) => {
+      fn $func(advancer: &mut Advancer) -> TokMatch {
+         debug_assert!(!advancer.completed());
+         advancer.one(|c| c == $c1)?;
+         advancer.one(|c| c == $c2)?;
+         Some(($token_type, advancer.consume()))
+      }
+   };
 }
 
-exact!(&['\n'], new_line_n, Tok::NewLine);
-exact!(&['\r', '\n'], new_line_rn, Tok::NewLine);
-exact!(&['\r'], new_line_r, Tok::NewLine);
-exact!(&['*', '*'], double_asterisk, Tok::DoubleAsterisk);
-exact!(&['=', '='], double_equals, Tok::DoubleEquals);
-exact!(&['!', '='], exclamation_equals, Tok::ExclamationEquals);
-exact!(&['<', '='], less_than_equals, Tok::LessThanEquals);
-exact!(&['>', '='], greater_than_equals, Tok::GreaterThanEquals);
-exact!(&['+', '='], plus_equals, Tok::PlusEquals);
-exact!(&['-', '='], minus_equals, Tok::MinusEquals);
-exact!(&['*', '='], asterisk_equals, Tok::AsteriskEquals);
-exact!(&['/', '='], slash_equals, Tok::SlashEquals);
-exact!(&['.', '.'], double_full_stop, Tok::DoubleFullStop);
-exact!(&['.'], full_stop, Tok::FullStop);
-exact!(&['='], equals, Tok::Equals);
-exact!(&['+'], plus, Tok::Plus);
-exact!(&['-'], minus, Tok::Minus);
-exact!(&['*'], asterisk, Tok::Asterisk);
-exact!(&['/'], slash, Tok::Slash);
-exact!(&['|'], vertical_bar, Tok::VerticalBar);
-exact!(&[':'], colon, Tok::Colon);
-exact!(&['^'], caret, Tok::Caret);
-exact!(&['('], paren_left, Tok::ParenLeft);
-exact!(&[')'], paren_right, Tok::ParenRight);
-exact!(&['['], square_bracket_left, Tok::SquareBracketLeft);
-exact!(&[']'], square_bracket_right, Tok::SquareBracketRight);
-exact!(&['<'], less_than, Tok::LessThan);
-exact!(&['>'], greater_than, Tok::GreaterThan);
-exact!(&['{'], curly_bracket_left, Tok::CurlyBracketLeft);
-exact!(&['}'], curly_backet_right, Tok::CurlyBracketRight);
+exact!('\n', new_line_n, Tok::NewLine);
+exact!('\r', '\n', new_line_rn, Tok::NewLine);
+exact!('\r', new_line_r, Tok::NewLine);
+exact!('*', '*', double_asterisk, Tok::DoubleAsterisk);
+exact!('=', '=', double_equals, Tok::DoubleEquals);
+exact!('!', '=', exclamation_equals, Tok::ExclamationEquals);
+exact!('<', '=', less_than_equals, Tok::LessThanEquals);
+exact!('>', '=', greater_than_equals, Tok::GreaterThanEquals);
+exact!('+', '=', plus_equals, Tok::PlusEquals);
+exact!('-', '=', minus_equals, Tok::MinusEquals);
+exact!('*', '=', asterisk_equals, Tok::AsteriskEquals);
+exact!('/', '=', slash_equals, Tok::SlashEquals);
+exact!('.', '.', double_full_stop, Tok::DoubleFullStop);
+exact!('.', full_stop, Tok::FullStop);
+exact!('=', equals, Tok::Equals);
+exact!('+', plus, Tok::Plus);
+exact!('-', minus, Tok::Minus);
+exact!('*', asterisk, Tok::Asterisk);
+exact!('/', slash, Tok::Slash);
+exact!('|', vertical_bar, Tok::VerticalBar);
+exact!(':', colon, Tok::Colon);
+exact!('^', caret, Tok::Caret);
+exact!('(', paren_left, Tok::ParenLeft);
+exact!(')', paren_right, Tok::ParenRight);
+exact!('[', square_bracket_left, Tok::SquareBracketLeft);
+exact!(']', square_bracket_right, Tok::SquareBracketRight);
+exact!('<', less_than, Tok::LessThan);
+exact!('>', greater_than, Tok::GreaterThan);
+exact!('{', curly_bracket_left, Tok::CurlyBracketLeft);
+exact!('}', curly_backet_right, Tok::CurlyBracketRight);
 
 const MATCHERS: &[fn(advancer: &mut Advancer) -> TokMatch] = &[
    space,
