@@ -14,3 +14,7 @@ criterion = "*"
 [[bench]]
 name = "tokenize"
 harness = false
+
+[[bench]]
+name = "advancer"
+harness = false
