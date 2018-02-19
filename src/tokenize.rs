@@ -51,8 +51,10 @@ type TokMatch = Option<(Tok, usize)>;
 
 type CharAdvancer<'a> = Advancer<'a, char>;
 
+type FnMatcher = fn(&char) -> bool;
+
 fn space(advancer: &mut CharAdvancer) -> TokMatch {
-   advancer.one_or_more(|c| *c == ' ')?;
+   advancer.one_or_more(' ')?;
 
    Some((Tok::Space, advancer.consume()))
 }
@@ -60,17 +62,21 @@ fn space(advancer: &mut CharAdvancer) -> TokMatch {
 fn identifier(advancer: &mut CharAdvancer) -> TokMatch {
    debug_assert!(!advancer.completed());
 
-   advancer.one(|c| (*c >= 'a' && *c <= 'z') || (*c >= 'A' && *c <= 'Z') || *c == '_')?;
+   advancer
+      .one((|c| (*c >= 'a' && *c <= 'z') || (*c >= 'A' && *c <= 'Z') || *c == '_') as FnMatcher)?;
 
-   advancer.zero_or_more(|c| {
-      (*c >= 'a' && *c <= 'z') || (*c >= 'A' && *c <= 'Z') || (*c >= '0' && *c <= '9') || *c == '_'
-   });
+   advancer.zero_or_more(
+      (|c| {
+         (*c >= 'a' && *c <= 'z') || (*c >= 'A' && *c <= 'Z') || (*c >= '0' && *c <= '9')
+            || *c == '_'
+      }) as FnMatcher,
+   );
 
    Some((Tok::Identifier, advancer.consume()))
 }
 
 fn digits(advancer: &mut CharAdvancer) -> TokMatch {
-   advancer.one_or_more(|c| *c >= '0' && *c <= '9')?;
+   advancer.one_or_more((|c| *c >= '0' && *c <= '9') as FnMatcher)?;
 
    Some((Tok::Digits, advancer.consume()))
 }
@@ -79,7 +85,7 @@ macro_rules! exact {
    ($c1:expr, $func:ident, $token_type:expr) => {
       fn $func(advancer: &mut CharAdvancer) -> TokMatch {
          debug_assert!(!advancer.completed());
-         advancer.one(|c| *c == $c1)?;
+         advancer.one($c1)?;
          Some(($token_type, advancer.consume()))
       }
    };
@@ -87,8 +93,8 @@ macro_rules! exact {
    ($c1:expr, $c2:expr, $func:ident, $token_type:expr) => {
       fn $func(advancer: &mut CharAdvancer) -> TokMatch {
          debug_assert!(!advancer.completed());
-         advancer.one(|c| *c == $c1)?;
-         advancer.one(|c| *c == $c2)?;
+         advancer.one($c1)?;
+         advancer.one($c2)?;
          Some(($token_type, advancer.consume()))
       }
    };
@@ -255,17 +261,18 @@ impl<'s> Tokenizer<'s> {
    }
 
    fn string(&mut self) -> Option<()> {
-      self.advancer.one(|c| *c == '\'')?;
+      self.advancer.one('\'')?;
 
       self.push(Tok::Apostrophe, 1);
 
       let mut span = 0;
       loop {
-         match *(self.advancer.one(|_| true)?) {
+         match *(self.advancer.one((|_| true) as FnMatcher)?) {
             '\\' => {
-               self.advancer.one(|c| {
-                  *c == 'n' || *c == '\'' || *c == '\\' || *c == 'r' || *c == 't' || *c == '0'
-               })?;
+               self.advancer.one(
+                  (|c| *c == 'n' || *c == '\'' || *c == '\\' || *c == 'r' || *c == 't' || *c == '0')
+                     as FnMatcher,
+               )?;
 
                span += 1;
             }

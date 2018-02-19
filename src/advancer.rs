@@ -1,3 +1,5 @@
+#![cfg_attr(feature = "cargo-clippy", allow(needless_pass_by_value))]
+
 pub struct Advancer<'s, T: 's> {
    slice: &'s [T],
    start: usize,
@@ -26,11 +28,14 @@ impl<'s, T> Advancer<'s, T> {
       self.peek == self.slice.len()
    }
 
-   pub fn one(&mut self, f: fn(&T) -> bool) -> Option<&T> {
-      if let Some(ch) = self.slice.get(self.peek) {
-         if f(ch) {
+   pub fn one<M>(&mut self, m: M) -> Option<&T>
+   where
+      M: Matcher<T>,
+   {
+      if let Some(item) = self.slice.get(self.peek) {
+         if m.matches(item) {
             self.peek += 1;
-            return Some(ch);
+            return Some(item);
          }
       }
 
@@ -38,9 +43,12 @@ impl<'s, T> Advancer<'s, T> {
       None
    }
 
-   pub fn zero_or_one(&mut self, f: fn(&T) -> bool) -> Option<()> {
-      if let Some(ch) = self.slice.get(self.peek) {
-         if f(ch) {
+   pub fn zero_or_one<M>(&mut self, m: M) -> Option<()>
+   where
+      M: Matcher<T>,
+   {
+      if let Some(item) = self.slice.get(self.peek) {
+         if m.matches(item) {
             self.peek += 1;
             return Some(());
          }
@@ -49,12 +57,15 @@ impl<'s, T> Advancer<'s, T> {
       None
    }
 
-   pub fn one_or_more(&mut self, f: fn(&T) -> bool) -> Option<()> {
+   pub fn one_or_more<M>(&mut self, m: M) -> Option<()>
+   where
+      M: Matcher<T>,
+   {
       debug_assert!(self.peek <= self.slice.len());
 
       let mut span = 0;
-      for ch in unsafe { self.slice.get_unchecked(self.peek..) } {
-         if !f(ch) {
+      for item in unsafe { self.slice.get_unchecked(self.peek..) } {
+         if !m.matches(item) {
             break;
          }
          span += 1;
@@ -69,18 +80,40 @@ impl<'s, T> Advancer<'s, T> {
       }
    }
 
-   pub fn zero_or_more(&mut self, f: fn(&T) -> bool) {
+   pub fn zero_or_more<M>(&mut self, m: M)
+   where
+      M: Matcher<T>,
+   {
       debug_assert!(self.peek <= self.slice.len());
 
       let mut span = 0;
-      for ch in unsafe { self.slice.get_unchecked(self.peek..) } {
-         if !f(ch) {
+      for item in unsafe { self.slice.get_unchecked(self.peek..) } {
+         if !m.matches(item) {
             break;
          }
          span += 1;
       }
 
       self.peek += span;
+   }
+}
+
+pub trait Matcher<T: ?Sized> {
+   fn matches(&self, &T) -> bool;
+}
+
+impl<T> Matcher<T> for T
+where
+   T: PartialEq,
+{
+   fn matches(&self, e: &T) -> bool {
+      self == e
+   }
+}
+
+impl<T> Matcher<T> for fn(&T) -> bool {
+   fn matches(&self, e: &T) -> bool {
+      self(e)
    }
 }
 

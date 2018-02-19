@@ -19,8 +19,8 @@ fn advancer_benchmark(c: &mut Criterion) {
 
          while !advancer.completed() {
             for _ in 0..10 {
-               advancer.zero_or_more(|c| *c == 'a');
-               advancer.zero_or_more(|c| *c == 'b');
+               advancer.zero_or_more('a');
+               advancer.zero_or_more('b');
             }
             advancer.consume();
          }
@@ -34,8 +34,8 @@ fn advancer_benchmark(c: &mut Criterion) {
 
          while !advancer.completed() {
             for _ in 0..10 {
-               advancer.one_or_more(|c| *c == 'a').unwrap();
-               advancer.one_or_more(|c| *c == 'b').unwrap();
+               advancer.one_or_more('a').unwrap();
+               advancer.one_or_more('b').unwrap();
             }
             advancer.consume();
          }
@@ -49,10 +49,10 @@ fn advancer_benchmark(c: &mut Criterion) {
 
          while !advancer.completed() {
             for _ in 0..5 {
-               advancer.one(|c| *c == 'a').unwrap();
+               advancer.one('a').unwrap();
             }
             for _ in 0..5 {
-               advancer.one(|c| *c == 'b').unwrap();
+               advancer.one('b').unwrap();
             }
             advancer.consume();
          }
@@ -66,10 +66,10 @@ fn advancer_benchmark(c: &mut Criterion) {
 
          while !advancer.completed() {
             for _ in 0..5 {
-               advancer.zero_or_one(|c| *c == 'a').unwrap();
+               advancer.zero_or_one('a').unwrap();
             }
             for _ in 0..5 {
-               advancer.zero_or_one(|c| *c == 'b').unwrap();
+               advancer.zero_or_one('b').unwrap();
             }
             advancer.consume();
          }
