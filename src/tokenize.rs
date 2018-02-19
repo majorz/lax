@@ -49,44 +49,46 @@ pub struct TokMeta {
 
 type TokMatch = Option<(Tok, usize)>;
 
-fn space(advancer: &mut Advancer) -> TokMatch {
-   advancer.one_or_more(|c| c == ' ')?;
+type CharAdvancer<'a> = Advancer<'a, char>;
+
+fn space(advancer: &mut CharAdvancer) -> TokMatch {
+   advancer.one_or_more(|c| *c == ' ')?;
 
    Some((Tok::Space, advancer.consume()))
 }
 
-fn identifier(advancer: &mut Advancer) -> TokMatch {
+fn identifier(advancer: &mut CharAdvancer) -> TokMatch {
    debug_assert!(!advancer.completed());
 
-   advancer.one(|c| (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '_')?;
+   advancer.one(|c| (*c >= 'a' && *c <= 'z') || (*c >= 'A' && *c <= 'Z') || *c == '_')?;
 
    advancer.zero_or_more(|c| {
-      (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '_'
+      (*c >= 'a' && *c <= 'z') || (*c >= 'A' && *c <= 'Z') || (*c >= '0' && *c <= '9') || *c == '_'
    });
 
    Some((Tok::Identifier, advancer.consume()))
 }
 
-fn digits(advancer: &mut Advancer) -> TokMatch {
-   advancer.one_or_more(|c| c >= '0' && c <= '9')?;
+fn digits(advancer: &mut CharAdvancer) -> TokMatch {
+   advancer.one_or_more(|c| *c >= '0' && *c <= '9')?;
 
    Some((Tok::Digits, advancer.consume()))
 }
 
 macro_rules! exact {
    ($c1:expr, $func:ident, $token_type:expr) => {
-      fn $func(advancer: &mut Advancer) -> TokMatch {
+      fn $func(advancer: &mut CharAdvancer) -> TokMatch {
          debug_assert!(!advancer.completed());
-         advancer.one(|c| c == $c1)?;
+         advancer.one(|c| *c == $c1)?;
          Some(($token_type, advancer.consume()))
       }
    };
 
    ($c1:expr, $c2:expr, $func:ident, $token_type:expr) => {
-      fn $func(advancer: &mut Advancer) -> TokMatch {
+      fn $func(advancer: &mut CharAdvancer) -> TokMatch {
          debug_assert!(!advancer.completed());
-         advancer.one(|c| c == $c1)?;
-         advancer.one(|c| c == $c2)?;
+         advancer.one(|c| *c == $c1)?;
+         advancer.one(|c| *c == $c2)?;
          Some(($token_type, advancer.consume()))
       }
    };
@@ -123,7 +125,7 @@ exact!('>', greater_than, Tok::GreaterThan);
 exact!('{', curly_bracket_left, Tok::CurlyBracketLeft);
 exact!('}', curly_backet_right, Tok::CurlyBracketRight);
 
-const MATCHERS: &[fn(advancer: &mut Advancer) -> TokMatch] = &[
+const MATCHERS: &[fn(advancer: &mut CharAdvancer) -> TokMatch] = &[
    space,
    new_line_n,
    new_line_rn,
@@ -159,7 +161,7 @@ const MATCHERS: &[fn(advancer: &mut Advancer) -> TokMatch] = &[
    full_stop,
 ];
 
-fn match_tok(advancer: &mut Advancer) -> TokMatch {
+fn match_tok(advancer: &mut CharAdvancer) -> TokMatch {
    for matcher in MATCHERS {
       if let Some((tok, span)) = matcher(advancer) {
          return Some((tok, span));
@@ -176,7 +178,7 @@ struct Tokenizer<'s> {
    pos: usize,
    line: usize,
    col: usize,
-   advancer: Advancer<'s>,
+   advancer: CharAdvancer<'s>,
 }
 
 impl<'s> Tokenizer<'s> {
@@ -190,7 +192,7 @@ impl<'s> Tokenizer<'s> {
       let line = 1;
       let col = 1;
 
-      let advancer = Advancer::new(chars);
+      let advancer = CharAdvancer::new(chars);
 
       Tokenizer {
          toks,
@@ -253,17 +255,17 @@ impl<'s> Tokenizer<'s> {
    }
 
    fn string(&mut self) -> Option<()> {
-      self.advancer.one(|c| c == '\'')?;
+      self.advancer.one(|c| *c == '\'')?;
 
       self.push(Tok::Apostrophe, 1);
 
       let mut span = 0;
       loop {
-         match self.advancer.one(|_| true)? {
+         match *(self.advancer.one(|_| true)?) {
             '\\' => {
-               self
-                  .advancer
-                  .one(|c| c == 'n' || c == '\'' || c == '\\' || c == 'r' || c == 't' || c == '0')?;
+               self.advancer.one(|c| {
+                  *c == 'n' || *c == '\'' || *c == '\\' || *c == 'r' || *c == 't' || *c == '0'
+               })?;
 
                span += 1;
             }
@@ -312,13 +314,13 @@ mod tests {
    macro_rules! m {
       ($matcher:ident, $input:expr) => (
          let chars = as_chars($input);
-         let mut advancer = Advancer::new(&chars);
+         let mut advancer = CharAdvancer::new(&chars);
          assert_eq!($matcher(&mut advancer), None);
       );
 
       ($matcher:ident, $input:expr, $tok:expr, $span:expr) => (
          let chars = as_chars($input);
-         let mut advancer = Advancer::new(&chars);
+         let mut advancer = CharAdvancer::new(&chars);
          assert_eq!($matcher(&mut advancer), Some(($tok, $span)));
       );
    }
@@ -326,7 +328,7 @@ mod tests {
    #[cfg(debug_assertions)]
    macro_rules! e {
       ($matcher:ident) => (
-         $matcher(&mut Advancer::new(&[]));
+         $matcher(&mut CharAdvancer::new(&[]));
       )
    }
 

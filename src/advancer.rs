@@ -1,13 +1,13 @@
-pub struct Advancer<'s> {
-   chars: &'s [char],
+pub struct Advancer<'s, T: 's> {
+   slice: &'s [T],
    start: usize,
    peek: usize,
 }
 
-impl<'s> Advancer<'s> {
-   pub fn new(chars: &'s [char]) -> Self {
+impl<'s, T> Advancer<'s, T> {
+   pub fn new(slice: &'s [T]) -> Self {
       Advancer {
-         chars: chars,
+         slice: slice,
          start: 0,
          peek: 0,
       }
@@ -23,14 +23,14 @@ impl<'s> Advancer<'s> {
    pub fn completed(&self) -> bool {
       debug_assert!(self.peek == self.start);
 
-      self.peek == self.chars.len()
+      self.peek == self.slice.len()
    }
 
-   pub fn one(&mut self, f: fn(char) -> bool) -> Option<char> {
-      if let Some(ch) = self.chars.get(self.peek) {
-         if f(*ch) {
+   pub fn one(&mut self, f: fn(&T) -> bool) -> Option<&T> {
+      if let Some(ch) = self.slice.get(self.peek) {
+         if f(ch) {
             self.peek += 1;
-            return Some(*ch);
+            return Some(ch);
          }
       }
 
@@ -38,23 +38,23 @@ impl<'s> Advancer<'s> {
       None
    }
 
-   pub fn zero_or_one(&mut self, f: fn(char) -> bool) -> Option<char> {
-      if let Some(ch) = self.chars.get(self.peek) {
-         if f(*ch) {
+   pub fn zero_or_one(&mut self, f: fn(&T) -> bool) -> Option<()> {
+      if let Some(ch) = self.slice.get(self.peek) {
+         if f(ch) {
             self.peek += 1;
-            return Some(*ch);
+            return Some(());
          }
       }
 
       None
    }
 
-   pub fn one_or_more(&mut self, f: fn(char) -> bool) -> Option<()> {
-      debug_assert!(self.peek <= self.chars.len());
+   pub fn one_or_more(&mut self, f: fn(&T) -> bool) -> Option<()> {
+      debug_assert!(self.peek <= self.slice.len());
 
       let mut span = 0;
-      for ch in unsafe { self.chars.get_unchecked(self.peek..) } {
-         if !f(*ch) {
+      for ch in unsafe { self.slice.get_unchecked(self.peek..) } {
+         if !f(ch) {
             break;
          }
          span += 1;
@@ -69,12 +69,12 @@ impl<'s> Advancer<'s> {
       }
    }
 
-   pub fn zero_or_more(&mut self, f: fn(char) -> bool) {
-      debug_assert!(self.peek <= self.chars.len());
+   pub fn zero_or_more(&mut self, f: fn(&T) -> bool) {
+      debug_assert!(self.peek <= self.slice.len());
 
       let mut span = 0;
-      for ch in unsafe { self.chars.get_unchecked(self.peek..) } {
-         if !f(*ch) {
+      for ch in unsafe { self.slice.get_unchecked(self.peek..) } {
+         if !f(ch) {
             break;
          }
          span += 1;
@@ -92,8 +92,8 @@ mod tests {
    #[should_panic]
    #[cfg(debug_assertions)]
    fn test_consume_unmoved() {
-      let chars: Vec<_> = "abcd".chars().collect();
-      let mut advancer = Advancer::new(&chars);
+      let slice: Vec<_> = "abcd".chars().collect();
+      let mut advancer = Advancer::new(&slice);
       let _ = advancer.consume();
    }
 }
