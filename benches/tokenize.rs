@@ -33,7 +33,7 @@ fn tokenize_benchmark(c: &mut Criterion) {
 
    let chars: Vec<_> = input.chars().collect();
 
-   c.bench_function("tokenize", |b| b.iter(|| tokenize(&chars)));
+   c.bench_function("tokenize", move |b| b.iter(|| tokenize(&chars)));
 }
 
 criterion_group!(tokenize_group, tokenize_benchmark);
