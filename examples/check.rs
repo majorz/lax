@@ -14,22 +14,20 @@ fn main() {
 
    let (toks, _) = tokenize(&chars);
 
-   let mut advancer = TokAdvancer::new(&toks);
-
-   let result = expression(&mut advancer);
-
-   if let Some(pos) = result {
-      println!("Pos: {}", pos);
-   }
-
-   println!("Completed: {}", advancer.completed());
-
-   println!("======");
-
    toks
       .iter()
       .enumerate()
       .for_each(|(i, item)| println!("[{:03}] {:?}", i, item));
+
+   println!("======");
+
+   let mut advancer = TokAdvancer::new(&toks);
+
+   if let Some(pos) = expression(&mut advancer) {
+      println!("End: {}", pos);
+   }
+
+   println!("Completed: {}", advancer.completed());
 }
 
 fn expression(advancer: &mut TokAdvancer) -> Option<usize> {
@@ -41,7 +39,7 @@ fn expression(advancer: &mut TokAdvancer) -> Option<usize> {
       }
    }
 
-   Some(advancer.consume())
+   Some(advancer.pos())
 }
 
 fn optional_right_hand(advancer: &mut TokAdvancer) -> Option<usize> {
@@ -79,11 +77,11 @@ fn parens(advancer: &mut TokAdvancer) -> Option<usize> {
 }
 
 fn single(advancer: &mut TokAdvancer) -> Option<usize> {
-   let fns = [identifier, number, parens];
-
-   from_slice(advancer, &fns)?;
-
-   Some(advancer.consume())
+   Some(choose(advancer, &[
+      identifier,
+      number,
+      parens,
+   ])?)
 }
 
 fn identifier(advancer: &mut TokAdvancer) -> Option<usize> {
@@ -108,11 +106,11 @@ fn space(advancer: &mut TokAdvancer) {
    advancer.zero_or_one(Tok::Space);
 }
 
-fn from_slice(advancer: &mut TokAdvancer, fns: &[SynFn]) -> Option<usize> {
+fn choose(advancer: &mut TokAdvancer, fns: &[SynFn]) -> Option<usize> {
    for f in fns {
-      let mut inner = advancer.clone();
+      let mut clone = advancer.clone();
 
-      if let Some(pos) = f(&mut inner) {
+      if let Some(pos) = f(&mut clone) {
          advancer.advance(pos);
          return Some(pos);
       }

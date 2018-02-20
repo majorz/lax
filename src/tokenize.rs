@@ -265,8 +265,8 @@ impl<'s> Tokenizer<'s> {
    fn string(&mut self) -> Option<()> {
       self.advancer.one('\'')?;
 
-      let str_start = self.advancer.current();
-      self.push(Tok::Apostrophe, str_start);
+      let start = self.advancer.pos();
+      self.push(Tok::Apostrophe, start);
 
       loop {
          match *(self.advancer.one((|_| true) as FnMatcher)?) {
@@ -279,8 +279,8 @@ impl<'s> Tokenizer<'s> {
                break;
             }
             '\n' | '\r' => {
-               self.end = self.advancer.current();
-               self.col += self.end - str_start;
+               self.end = self.advancer.pos();
+               self.col += self.end - start;
 
                panic!(
                   "New line in string at line: {}, col: {}",
@@ -291,13 +291,13 @@ impl<'s> Tokenizer<'s> {
          }
       }
 
-      let str_after = self.advancer.current();
+      let after = self.advancer.pos();
 
-      if str_start != str_after - 1 {
-         self.push(Tok::Text, str_after - 1);
+      if start != after - 1 {
+         self.push(Tok::Text, after - 1);
       }
 
-      self.push(Tok::Apostrophe, str_after);
+      self.push(Tok::Apostrophe, after);
 
       self.advancer.consume();
 

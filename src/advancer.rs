@@ -14,13 +14,15 @@ impl<'s, T> Advancer<'s, T> {
       }
    }
 
-   pub fn current(&self) -> usize {
+   pub fn pos(&self) -> usize {
       self.peek
    }
 
    pub fn advance(&mut self, pos: usize) {
-      debug_assert!(pos > self.peek && pos <= self.slice.len());
+      debug_assert!(self.slice.len() >= pos);
+      debug_assert!(pos > self.peek);
       self.peek = pos;
+      self.start = pos;
    }
 
    pub fn reset(&mut self) {
@@ -35,7 +37,6 @@ impl<'s, T> Advancer<'s, T> {
 
    pub fn completed(&self) -> bool {
       debug_assert!(self.peek == self.start);
-
       self.peek == self.slice.len()
    }
 
