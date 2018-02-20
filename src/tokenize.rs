@@ -42,7 +42,7 @@ pub enum Tok {
 #[derive(Debug, Clone, PartialEq)]
 pub struct TokMeta {
    pub span: usize,
-   pub pos: usize,
+   pub end: usize,
    pub line: usize,
    pub col: usize,
 }
@@ -169,8 +169,8 @@ const MATCHERS: &[fn(advancer: &mut CharAdvancer) -> TokMatch] = &[
 
 fn match_tok(advancer: &mut CharAdvancer) -> TokMatch {
    for matcher in MATCHERS {
-      if let Some((tok, span)) = matcher(advancer) {
-         return Some((tok, span));
+      if let Some((tok, end)) = matcher(advancer) {
+         return Some((tok, end));
       }
    }
 
@@ -181,7 +181,7 @@ struct Tokenizer<'s> {
    toks: Vec<Tok>,
    toks_meta: Vec<TokMeta>,
    after_new_line: bool,
-   pos: usize,
+   end: usize,
    line: usize,
    col: usize,
    advancer: CharAdvancer<'s>,
@@ -194,7 +194,7 @@ impl<'s> Tokenizer<'s> {
 
       let after_new_line = true;
 
-      let pos = 0;
+      let end = 0;
       let line = 1;
       let col = 1;
 
@@ -204,7 +204,7 @@ impl<'s> Tokenizer<'s> {
          toks,
          toks_meta,
          after_new_line,
-         pos,
+         end,
          line,
          col,
          advancer,
@@ -219,18 +219,20 @@ impl<'s> Tokenizer<'s> {
       (toks, toks_meta)
    }
 
-   fn push(&mut self, tok: Tok, span: usize) {
+   fn push(&mut self, tok: Tok, end: usize) {
       self.toks.push(tok);
+
+      let span = end - self.end;
 
       self.toks_meta.push(TokMeta {
          span: span,
-         pos: self.pos,
+         end: end,
          line: self.line,
          col: self.col,
       });
 
       self.col += span;
-      self.pos += span;
+      self.end = end;
    }
 
    fn tokenize(mut self) -> Self {
@@ -240,10 +242,10 @@ impl<'s> Tokenizer<'s> {
             continue;
          }
 
-         if let Some((tok, span)) = match_tok(&mut self.advancer) {
+         if let Some((tok, end)) = match_tok(&mut self.advancer) {
             self.after_new_line = tok == Tok::NewLine;
 
-            self.push(tok, span);
+            self.push(tok, end);
 
             if self.after_new_line {
                self.line += 1;
@@ -263,25 +265,22 @@ impl<'s> Tokenizer<'s> {
    fn string(&mut self) -> Option<()> {
       self.advancer.one('\'')?;
 
-      self.push(Tok::Apostrophe, 1);
+      let str_start = self.advancer.current();
+      self.push(Tok::Apostrophe, str_start);
 
-      let mut span = 0;
       loop {
          match *(self.advancer.one((|_| true) as FnMatcher)?) {
             '\\' => {
-               self.advancer.one(
-                  (|c| *c == 'n' || *c == '\'' || *c == '\\' || *c == 'r' || *c == 't' || *c == '0')
-                     as FnMatcher,
-               )?;
-
-               span += 1;
+               self
+                  .advancer
+                  .one(&['n', '\'', '\\', 'r', 't', '0'] as &[char])?;
             }
             '\'' => {
                break;
             }
             '\n' | '\r' => {
-               self.pos += span;
-               self.col += span;
+               self.end = self.advancer.current();
+               self.col += self.end - str_start;
 
                panic!(
                   "New line in string at line: {}, col: {}",
@@ -290,15 +289,15 @@ impl<'s> Tokenizer<'s> {
             }
             _ => {}
          }
-
-         span += 1;
       }
 
-      if span != 0 {
-         self.push(Tok::Text, span);
+      let str_after = self.advancer.current();
+
+      if str_start != str_after - 1 {
+         self.push(Tok::Text, str_after - 1);
       }
 
-      self.push(Tok::Apostrophe, 1);
+      self.push(Tok::Apostrophe, str_after);
 
       self.advancer.consume();
 
@@ -325,10 +324,10 @@ mod tests {
          assert_eq!($matcher(&mut advancer), None);
       );
 
-      ($matcher:ident, $input:expr, $tok:expr, $span:expr) => (
+      ($matcher:ident, $input:expr, $tok:expr, $end:expr) => (
          let chars = as_chars($input);
          let mut advancer = CharAdvancer::new(&chars);
-         assert_eq!($matcher(&mut advancer), Some(($tok, $span)));
+         assert_eq!($matcher(&mut advancer), Some(($tok, $end)));
       );
    }
 
@@ -352,18 +351,23 @@ mod tests {
          assert!(tokenizer.string().is_some());
          let (toks, toks_meta) = tokenizer.destructure();
          if $span == 0 {
-            assert!(toks.len() == 2);
+            assert_eq!(toks.len(), 2);
             assert_eq!(toks[0], Tok::Apostrophe);
             assert_eq!(toks[1], Tok::Apostrophe);
+            assert_eq!(toks_meta[0].end, 1);
             assert_eq!(toks_meta[0].span, 1);
+            assert_eq!(toks_meta[1].end, 2);
             assert_eq!(toks_meta[1].span, 1);
          } else {
-            assert!(toks.len() == 3);
+            assert_eq!(toks.len(), 3);
             assert_eq!(toks[0], Tok::Apostrophe);
             assert_eq!(toks[1], Tok::Text);
             assert_eq!(toks[2], Tok::Apostrophe);
+            assert_eq!(toks_meta[0].end, 1);
             assert_eq!(toks_meta[0].span, 1);
+            assert_eq!(toks_meta[1].end, $span + 1);
             assert_eq!(toks_meta[1].span, $span);
+            assert_eq!(toks_meta[2].end, $span + 2);
             assert_eq!(toks_meta[2].span, 1);
          }
       );

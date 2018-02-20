@@ -1,6 +1,11 @@
 extern crate nel;
 
 use nel::tokenize::*;
+use nel::advancer::*;
+
+type TokAdvancer<'a> = Advancer<'a, Tok>;
+
+type SynFn = fn(&mut TokAdvancer) -> Option<usize>;
 
 fn main() {
    let source = "(100.0+4)*0.2-0.6";
@@ -9,182 +14,96 @@ fn main() {
 
    let (toks, _) = tokenize(&chars);
 
-   let mut peeker = Peeker::new(&toks);
+   let mut advancer = TokAdvancer::new(&toks);
 
-   let result = expression(&mut peeker);
+   let result = expression(&mut advancer);
 
-   if result.is_some() {
-      println!("done");
-   } else {
-      println!("nope");
+   if let Some(pos) = result {
+      println!("Pos: {}", pos);
    }
 
-   println!("remaining: {}", peeker.remaining());
-
-   let count = toks.len() - peeker.remaining();
-
-   toks[..count]
-      .iter()
-      .enumerate()
-      .for_each(|(i, item)| println!("[{:03}] {:?}", i, item));
+   println!("Completed: {}", advancer.completed());
 
    println!("======");
 
-   toks[count..]
+   toks
       .iter()
       .enumerate()
-      .for_each(|(i, item)| println!("[{:03}] {:?}", count + i, item));
+      .for_each(|(i, item)| println!("[{:03}] {:?}", i, item));
 }
 
-fn expression(peeker: &mut Peeker) -> Option<usize> {
-   let mut pos = peeker.descend(single)?;
+fn expression(advancer: &mut TokAdvancer) -> Option<usize> {
+   single(advancer)?;
 
    loop {
-      let operators = [&Tok::Plus, &Tok::Minus, &Tok::Asterisk, &Tok::Slash];
-
-      if peeker.optional_from_slice(&operators).is_some() {
-         if let Some(i) = peeker.descend(single) {
-            pos = i;
-         } else {
-            break;
-         }
-      } else {
+      if optional_right_hand(advancer).is_none() {
          break;
       }
    }
 
-   peeker.adjust(pos)
+   Some(advancer.consume())
 }
 
-fn parens(peeker: &mut Peeker) -> Option<usize> {
-   peeker.next(&Tok::ParenLeft)?;
+fn optional_right_hand(advancer: &mut TokAdvancer) -> Option<usize> {
+   let operators: &[Tok] = &[Tok::Plus, Tok::Minus, Tok::Asterisk, Tok::Slash];
 
-   peeker.descend(expression)?;
+   let mut clone = advancer.clone();
+   if clone.zero_or_one(operators).is_some() {
+      if let Some(pos) = single(&mut clone) {
+         advancer.advance(pos);
+         return Some(pos);
+      }
+   }
 
-   peeker.next(&Tok::ParenRight)?;
-
-   peeker.commit()
+   None
 }
 
-fn single(peeker: &mut Peeker) -> Option<usize> {
+fn parens(advancer: &mut TokAdvancer) -> Option<usize> {
+   advancer.one(Tok::ParenLeft)?;
+
+   expression(advancer)?;
+
+   advancer.one(Tok::ParenRight)?;
+
+   Some(advancer.consume())
+}
+
+fn single(advancer: &mut TokAdvancer) -> Option<usize> {
    let fns = [identifier, number, parens];
 
-   for f in &fns {
-      if let Some(pos) = peeker.descend(*f) {
-         return peeker.adjust(pos);
-      }
-   }
+   from_slice(advancer, &fns)?;
 
-   peeker.reset()
+   Some(advancer.consume())
 }
 
-fn identifier(peeker: &mut Peeker) -> Option<usize> {
-   peeker.next(&Tok::Identifier)?;
-   peeker.commit()
+fn identifier(advancer: &mut TokAdvancer) -> Option<usize> {
+   advancer.one(Tok::Identifier)?;
+   Some(advancer.consume())
 }
 
-fn number(peeker: &mut Peeker) -> Option<usize> {
-   if peeker.optional(&Tok::Digits).is_some() {
-      if peeker.optional(&Tok::FullStop).is_some() {
-         peeker.optional(&Tok::Digits);
+fn number(advancer: &mut TokAdvancer) -> Option<usize> {
+   if advancer.zero_or_one(Tok::Digits).is_some() {
+      if advancer.zero_or_one(Tok::FullStop).is_some() {
+         advancer.zero_or_one(Tok::Digits);
       }
    } else {
-      peeker.next(&Tok::FullStop)?;
-      peeker.next(&Tok::Digits)?;
+      advancer.one(Tok::FullStop)?;
+      advancer.one(Tok::Digits)?;
    }
 
-   peeker.commit()
+   Some(advancer.consume())
 }
 
-#[derive(Clone)]
-pub struct Peeker<'s> {
-   input: &'s [Tok],
-   start: usize,
-   peek: usize,
-}
+fn from_slice(advancer: &mut TokAdvancer, fns: &[SynFn]) -> Option<usize> {
+   for f in fns {
+      let mut inner = advancer.clone();
 
-impl<'s> Peeker<'s> {
-   fn new(input: &'s [Tok]) -> Self {
-      Peeker {
-         input: input,
-         start: 0,
-         peek: 0,
+      if let Some(pos) = f(&mut inner) {
+         advancer.advance(pos);
+         return Some(pos);
       }
    }
 
-   fn step(&mut self) -> Option<usize> {
-      self.peek += 1;
-      Some(self.peek)
-   }
-
-   fn current(&self) -> Option<&'s Tok> {
-      self.input.get(self.peek)
-   }
-
-   fn commit(&mut self) -> Option<usize> {
-      debug_assert!(self.peek != self.start);
-      self.start = self.peek;
-      Some(self.start)
-   }
-
-   fn adjust(&mut self, pos: usize) -> Option<usize> {
-      debug_assert!(self.start != pos);
-      self.start = pos;
-      self.peek = pos;
-      Some(pos)
-   }
-
-   fn reset(&mut self) -> Option<usize> {
-      self.peek = self.start;
-      None
-   }
-
-   fn remaining(&self) -> usize {
-      self.input.len() - self.start
-   }
-
-   #[allow(dead_code)]
-   fn next_fn(&mut self, f: fn(item: &Tok) -> bool) -> Option<usize> {
-      if let Some(current) = self.current() {
-         if f(current) {
-            return self.step();
-         }
-      }
-      self.reset()
-   }
-
-   fn next(&mut self, item: &Tok) -> Option<usize> {
-      if let Some(current) = self.current() {
-         if *current == *item {
-            return self.step();
-         }
-      }
-      self.reset()
-   }
-
-   fn optional_from_slice(&mut self, items: &[&Tok]) -> Option<usize> {
-      if let Some(current) = self.current() {
-         for item in items {
-            if *current == **item {
-               return self.step();
-            }
-         }
-      }
-      None
-   }
-
-   fn optional(&mut self, item: &Tok) -> Option<usize> {
-      if let Some(current) = self.current() {
-         if *current == *item {
-            return self.step();
-         }
-      }
-      None
-   }
-
-   fn descend(&mut self, f: fn(&mut Peeker) -> Option<usize>) -> Option<usize> {
-      let mut peeker = self.clone();
-      self.peek = f(&mut peeker)?;
-      Some(self.peek)
-   }
+   advancer.reset();
+   None
 }

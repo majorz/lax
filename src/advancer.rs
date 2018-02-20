@@ -1,5 +1,4 @@
-#![cfg_attr(feature = "cargo-clippy", allow(needless_pass_by_value))]
-
+#[derive(Clone)]
 pub struct Advancer<'s, T: 's> {
    slice: &'s [T],
    start: usize,
@@ -15,11 +14,23 @@ impl<'s, T> Advancer<'s, T> {
       }
    }
 
+   pub fn current(&self) -> usize {
+      self.peek
+   }
+
+   pub fn advance(&mut self, pos: usize) {
+      debug_assert!(pos > self.peek && pos <= self.slice.len());
+      self.peek = pos;
+   }
+
+   pub fn reset(&mut self) {
+      self.peek = self.start;
+   }
+
    pub fn consume(&mut self) -> usize {
       debug_assert!(self.peek != self.start);
-      let span = self.peek - self.start;
       self.start = self.peek;
-      span
+      self.start
    }
 
    pub fn completed(&self) -> bool {
@@ -28,10 +39,8 @@ impl<'s, T> Advancer<'s, T> {
       self.peek == self.slice.len()
    }
 
-   pub fn one<M>(&mut self, m: M) -> Option<&T>
-   where
-      M: Matcher<T>,
-   {
+   #[cfg_attr(feature = "cargo-clippy", allow(needless_pass_by_value))]
+   pub fn one<M: Matcher<T>>(&mut self, m: M) -> Option<&T> {
       if let Some(item) = self.slice.get(self.peek) {
          if m.matches(item) {
             self.peek += 1;
@@ -39,28 +48,24 @@ impl<'s, T> Advancer<'s, T> {
          }
       }
 
-      self.peek = self.start;
+      self.reset();
       None
    }
 
-   pub fn zero_or_one<M>(&mut self, m: M) -> Option<()>
-   where
-      M: Matcher<T>,
-   {
+   #[cfg_attr(feature = "cargo-clippy", allow(needless_pass_by_value))]
+   pub fn zero_or_one<M: Matcher<T>>(&mut self, m: M) -> Option<&T> {
       if let Some(item) = self.slice.get(self.peek) {
          if m.matches(item) {
             self.peek += 1;
-            return Some(());
+            return Some(item);
          }
       }
 
       None
    }
 
-   pub fn one_or_more<M>(&mut self, m: M) -> Option<()>
-   where
-      M: Matcher<T>,
-   {
+   #[cfg_attr(feature = "cargo-clippy", allow(needless_pass_by_value))]
+   pub fn one_or_more<M: Matcher<T>>(&mut self, m: M) -> Option<()> {
       debug_assert!(self.peek <= self.slice.len());
 
       let mut span = 0;
@@ -75,15 +80,13 @@ impl<'s, T> Advancer<'s, T> {
          self.peek += span;
          Some(())
       } else {
-         self.peek = self.start;
+         self.reset();
          None
       }
    }
 
-   pub fn zero_or_more<M>(&mut self, m: M)
-   where
-      M: Matcher<T>,
-   {
+   #[cfg_attr(feature = "cargo-clippy", allow(needless_pass_by_value))]
+   pub fn zero_or_more<M: Matcher<T>>(&mut self, m: M) {
       debug_assert!(self.peek <= self.slice.len());
 
       let mut span = 0;
@@ -98,7 +101,7 @@ impl<'s, T> Advancer<'s, T> {
    }
 }
 
-pub trait Matcher<T: ?Sized> {
+pub trait Matcher<T> {
    fn matches(&self, &T) -> bool;
 }
 
@@ -114,6 +117,21 @@ where
 impl<T> Matcher<T> for fn(&T) -> bool {
    fn matches(&self, e: &T) -> bool {
       self(e)
+   }
+}
+
+impl<'a, T> Matcher<T> for &'a [T]
+where
+   T: PartialEq,
+{
+   fn matches(&self, e: &T) -> bool {
+      for item in *self {
+         if item == e {
+            return true;
+         }
+      }
+
+      false
    }
 }
 
