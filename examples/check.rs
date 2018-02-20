@@ -8,7 +8,7 @@ type TokAdvancer<'a> = Advancer<'a, Tok>;
 type SynFn = fn(&mut TokAdvancer) -> Option<usize>;
 
 fn main() {
-   let source = "(100.0+4)*0.2-0.6";
+   let source = "(100.0 + 4) * 0.2 - 0.6";
 
    let chars: Vec<_> = source.chars().collect();
 
@@ -48,7 +48,13 @@ fn optional_right_hand(advancer: &mut TokAdvancer) -> Option<usize> {
    let operators: &[Tok] = &[Tok::Plus, Tok::Minus, Tok::Asterisk, Tok::Slash];
 
    let mut clone = advancer.clone();
+
+   space(&mut clone);
+
    if clone.zero_or_one(operators).is_some() {
+
+      space(&mut clone);
+
       if let Some(pos) = single(&mut clone) {
          advancer.advance(pos);
          return Some(pos);
@@ -61,7 +67,11 @@ fn optional_right_hand(advancer: &mut TokAdvancer) -> Option<usize> {
 fn parens(advancer: &mut TokAdvancer) -> Option<usize> {
    advancer.one(Tok::ParenLeft)?;
 
+   space(advancer);
+
    expression(advancer)?;
+
+   space(advancer);
 
    advancer.one(Tok::ParenRight)?;
 
@@ -92,6 +102,10 @@ fn number(advancer: &mut TokAdvancer) -> Option<usize> {
    }
 
    Some(advancer.consume())
+}
+
+fn space(advancer: &mut TokAdvancer) {
+   advancer.zero_or_one(Tok::Space);
 }
 
 fn from_slice(advancer: &mut TokAdvancer, fns: &[SynFn]) -> Option<usize> {
