@@ -167,7 +167,7 @@ const MATCHERS: &[fn(advancer: &mut CharAdvancer) -> TokMatch] = &[
    full_stop,
 ];
 
-fn match_tok(advancer: &mut CharAdvancer) -> TokMatch {
+fn choose_matcher(advancer: &mut CharAdvancer) -> TokMatch {
    for matcher in MATCHERS {
       if let Some((tok, end)) = matcher(advancer) {
          return Some((tok, end));
@@ -237,32 +237,33 @@ impl<'s> Tokenizer<'s> {
 
    fn tokenize(mut self) -> Self {
       while !self.advancer.completed() {
-         if self.string().is_some() {
-            self.after_new_line = false;
-            continue;
-         }
-
-         if let Some((tok, end)) = match_tok(&mut self.advancer) {
-            self.after_new_line = tok == Tok::NewLine;
-
-            self.push(tok, end);
-
-            if self.after_new_line {
-               self.line += 1;
-               self.col = 1;
-            }
-         } else {
-            panic!(
-               "Unrecognized token at line: {}, col: {}",
-               self.line, self.col
-            );
+         if self.match_string().is_none() {
+            self.match_tok()
          }
       }
 
       self
    }
 
-   fn string(&mut self) -> Option<()> {
+   fn match_tok(&mut self) {
+      if let Some((tok, end)) = choose_matcher(&mut self.advancer) {
+         self.after_new_line = tok == Tok::NewLine;
+
+         self.push(tok, end);
+
+         if self.after_new_line {
+            self.line += 1;
+            self.col = 1;
+         }
+      } else {
+         panic!(
+            "Unrecognized token at line: {}, col: {}",
+            self.line, self.col
+         );
+      }
+   }
+
+   fn match_string(&mut self) -> Option<()> {
       self.advancer.one('\'')?;
 
       let start = self.advancer.pos();
@@ -300,6 +301,8 @@ impl<'s> Tokenizer<'s> {
       self.push(Tok::Apostrophe, after);
 
       self.advancer.consume();
+
+      self.after_new_line = false;
 
       Some(())
    }
@@ -342,13 +345,13 @@ mod tests {
       ($input:expr) => (
          let chars = as_chars($input);
          let mut tokenizer = Tokenizer::new(&chars);
-         assert!(tokenizer.string().is_none());
+         assert!(tokenizer.match_string().is_none());
       );
 
       ($input:expr, $span:expr) => (
          let chars = as_chars($input);
          let mut tokenizer = Tokenizer::new(&chars);
-         assert!(tokenizer.string().is_some());
+         assert!(tokenizer.match_string().is_some());
          let (toks, toks_meta) = tokenizer.destructure();
          if $span == 0 {
             assert_eq!(toks.len(), 2);

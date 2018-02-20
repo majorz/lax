@@ -50,7 +50,6 @@ fn optional_right_hand(advancer: &mut TokAdvancer) -> Option<usize> {
    space(&mut clone);
 
    if clone.zero_or_one(operators).is_some() {
-
       space(&mut clone);
 
       if let Some(pos) = single(&mut clone) {
@@ -77,11 +76,7 @@ fn parens(advancer: &mut TokAdvancer) -> Option<usize> {
 }
 
 fn single(advancer: &mut TokAdvancer) -> Option<usize> {
-   Some(choose(advancer, &[
-      identifier,
-      number,
-      parens,
-   ])?)
+   Some(choose(advancer, &[identifier, number, parens])?)
 }
 
 fn identifier(advancer: &mut TokAdvancer) -> Option<usize> {
