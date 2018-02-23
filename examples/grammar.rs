@@ -74,10 +74,9 @@ enum Node {
    Element(Element),
    Reference(Element),
    Tok(Tok),
-   Sequence,
-   Choice,
-   ZeroOrOne,
-   End(usize),
+   Sequence(usize),
+   Choice(usize),
+   ZeroOrOne(usize),
 }
 
 struct Builder {
@@ -94,17 +93,14 @@ impl Builder {
    }
 
    fn destructure(self) -> Vec<Node> {
-      let Self {
-         nodes, ..
-      } = self;
+      let Self { nodes, .. } = self;
 
       nodes
    }
 
    fn element(&mut self, element: Element) -> &mut Self {
-      self.start();
       self.nodes.push(Node::Element(element));
-      self
+      self.sequence()
    }
 
    fn reference(&mut self, element: Element) -> &mut Self {
@@ -118,32 +114,43 @@ impl Builder {
    }
 
    fn sequence(&mut self) -> &mut Self {
-      self.start();
-      self.nodes.push(Node::Sequence);
+      self.start(Node::Sequence(0));
       self
    }
 
    fn choice(&mut self) -> &mut Self {
-      self.start();
-      self.nodes.push(Node::Choice);
+      self.start(Node::Choice(0));
       self
    }
 
    fn zero_or_one(&mut self) -> &mut Self {
-      self.start();
-      self.nodes.push(Node::ZeroOrOne);
+      self.start(Node::ZeroOrOne(0));
+      self
+   }
+
+   fn start(&mut self, parent: Node) -> &mut Self {
+      self.starts.push(self.nodes.len());
+      self.nodes.push(parent);
       self
    }
 
    fn end(&mut self) -> &mut Self {
       debug_assert!(!self.starts.is_empty());
-      let start = self.starts.pop().unwrap();
-      self.nodes.push(Node::End(start));
-      self
-   }
 
-   fn start(&mut self) {
-      self.starts.push(self.nodes.len());
+      let start = self.starts.pop().unwrap();
+
+      debug_assert!(self.nodes.len() > start);
+
+      let end = self.nodes.len();
+
+      match *unsafe { self.nodes.get_unchecked_mut(start) } {
+         Node::Sequence(ref mut i) | Node::Choice(ref mut i) | Node::ZeroOrOne(ref mut i) => {
+            *i = end
+         }
+         _ => unreachable!(),
+      }
+
+      self
    }
 }
 
