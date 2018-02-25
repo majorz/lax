@@ -2,6 +2,8 @@
 
 extern crate nel;
 
+use std::usize;
+
 use nel::tokenize::*;
 
 fn main() {
@@ -13,29 +15,51 @@ fn main() {
 
    number_fractional_only(&mut builder);
 
-   let nodes = builder.destructure();
+   let (nodes, elements) = builder.destructure();
 
    nodes
       .iter()
       .enumerate()
       .for_each(|(i, node)| println!("[{:03}] {:?}", i, node));
+
+   println!("---");
+
+   elements
+      .iter()
+      .enumerate()
+      .for_each(|(i, pos)| println!("[{:03}] {}", i, pos));
+
+   println!("===");
+
+   let source = "100.0";
+
+   let chars: Vec<_> = source.chars().collect();
+
+   let (toks, _) = tokenize(&chars);
+
+   toks
+      .iter()
+      .enumerate()
+      .for_each(|(i, tok)| println!("[{:03}] {:?}", i, tok));
+
+   println!("---");
+
+   parse_toks(&nodes, &elements, &toks);
 }
 
 #[cfg_attr(rustfmt, rustfmt_skip)]
-fn number(builder: &mut Builder) {
-   builder
-      .element(Element::Number)
-         .choice()
-            .reference(Element::NumberWithInteger)
-            .reference(Element::NumberFractionalOnly)
-         .end()
+fn number(b: &mut Builder) {
+   b.element(Element::Number)
+      .choice()
+         .reference(Element::NumberWithInteger)
+         .reference(Element::NumberFractionalOnly)
       .end();
 }
 
 #[cfg_attr(rustfmt, rustfmt_skip)]
-fn number_with_integer(builder: &mut Builder) {
-   builder
-      .element(Element::NumberWithInteger)
+fn number_with_integer(b: &mut Builder) {
+   b.element(Element::NumberWithInteger)
+      .sequence()
          .tok(Tok::Digits)
          .zero_or_one()
             .tok(Tok::FullStop)
@@ -47,17 +71,17 @@ fn number_with_integer(builder: &mut Builder) {
 }
 
 #[cfg_attr(rustfmt, rustfmt_skip)]
-fn number_fractional_only(builder: &mut Builder) {
-   builder
-      .element(Element::NumberFractionalOnly)
+fn number_fractional_only(b: &mut Builder) {
+   b.element(Element::NumberFractionalOnly)
+      .sequence()
          .tok(Tok::FullStop)
          .tok(Tok::Digits)
       .end();
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 enum Element {
-   Number,
+   Number = 0,
    NumberWithInteger,
    NumberFractionalOnly,
    Space,
@@ -68,6 +92,8 @@ enum Element {
    NaryRight,
    Operators,
 }
+
+const ELS: usize = Element::Operators as usize;
 
 #[derive(Debug)]
 enum Node {
@@ -82,6 +108,7 @@ enum Node {
 struct Builder {
    nodes: Vec<Node>,
    starts: Vec<usize>,
+   elements: [usize; ELS],
 }
 
 impl Builder {
@@ -89,18 +116,21 @@ impl Builder {
       Builder {
          nodes: Vec::new(),
          starts: Vec::new(),
+         elements: [0; ELS],
       }
    }
 
-   fn destructure(self) -> Vec<Node> {
-      let Self { nodes, .. } = self;
-
-      nodes
+   fn destructure(self) -> (Vec<Node>, [usize; ELS]) {
+      let Self {
+         nodes, elements, ..
+      } = self;
+      (nodes, elements)
    }
 
    fn element(&mut self, element: Element) -> &mut Self {
+      self.elements[element as usize] = self.nodes.len();
       self.nodes.push(Node::Element(element));
-      self.sequence()
+      self
    }
 
    fn reference(&mut self, element: Element) -> &mut Self {
@@ -151,6 +181,137 @@ impl Builder {
       }
 
       self
+   }
+}
+
+#[derive(Debug)]
+struct State {
+   list_type: ListType,
+   current: usize,
+   end: usize,
+   tok_pos: usize,
+}
+
+#[derive(Debug, PartialEq)]
+enum ListType {
+   Element,
+   Sequence,
+   Choice,
+   ZeroOrOne,
+}
+
+impl State {
+   fn new(list_type: ListType, current: usize, end: usize, tok_pos: usize) -> Self {
+      State {
+         list_type,
+         current,
+         end,
+         tok_pos,
+      }
+   }
+}
+
+fn parse_toks(nodes: &[Node], elements: &[usize; ELS], toks: &[Tok]) {
+   let mut states: Vec<State> = Vec::new();
+
+   let mut next_pos = elements[Element::Number as usize];
+   let mut tok_pos = 0;
+
+   loop {
+      println!("{}", next_pos);
+
+      println!("{:?}", nodes[next_pos]);
+
+      next_pos = match nodes[next_pos] {
+         Node::Element(ref _element) => {
+            states.push(State::new(ListType::Element, next_pos, usize::MAX, tok_pos));
+            next_pos + 1
+         }
+         Node::Sequence(end) => {
+            states.push(State::new(ListType::Sequence, next_pos, end, tok_pos));
+            next_pos + 1
+         }
+         Node::Choice(end) => {
+            states.push(State::new(ListType::Choice, next_pos, end, tok_pos));
+            next_pos + 1
+         }
+         Node::ZeroOrOne(end) => {
+            states.push(State::new(ListType::ZeroOrOne, next_pos, end, tok_pos));
+            next_pos + 1
+         }
+         Node::Reference(ref element) => elements[*element as usize],
+         Node::Tok(ref tok) => {
+            let mut matched = if let Some(tok_src) = toks.get(tok_pos) {
+               tok == tok_src
+            } else {
+               false
+            };
+
+            if matched {
+               println!("[{}] {:?}", tok_pos, tok);
+            }
+
+            tok_pos += 1;
+            next_pos += 1;
+
+            loop {
+               if let Some(state) = states.last() {
+                  println!("{:?}", state);
+
+                  match state.list_type {
+                     ListType::ZeroOrOne | ListType::Sequence => if !matched {
+                        next_pos = state.end;
+                     },
+                     ListType::Choice => {
+                        if matched {
+                           next_pos = state.end;
+                        } else {
+                           tok_pos = state.tok_pos;
+                        }
+                     }
+                     ListType::Element => unreachable!(),
+                  }
+
+                  if next_pos != state.end {
+                     break;
+                  }
+
+                  if state.list_type == ListType::ZeroOrOne && !matched {
+                     matched = true;
+                  }
+               } else {
+                  unreachable!();
+               }
+
+               states.pop();
+
+               let pop = if let Some(state) = states.last() {
+                  state.list_type == ListType::Element
+               } else {
+                  false
+               };
+
+               if pop {
+                  states.pop();
+               }
+
+               if let Some(state) = states.last_mut() {
+                  next_pos = state.current + 1;
+               } else {
+                  println!("{}", matched);
+                  return;
+               }
+            }
+
+            next_pos
+         }
+      };
+
+      if let Some(state) = states.last_mut() {
+         state.current = next_pos;
+      } else {
+         unreachable!();
+      }
    }
 }
 
