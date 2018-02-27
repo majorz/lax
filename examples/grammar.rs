@@ -235,11 +235,11 @@ impl State {
 fn parse_toks(nodes: &[Node], elements: &[usize; ELS], toks: &[Tok]) {
    let mut states: Vec<State> = Vec::new();
 
-   let mut next_pos = elements[Element::Number as usize];
+   let mut next_pos = elements[Element::Single as usize];
    let mut tok_pos = 0;
 
    loop {
-      println!("[{}] {:?}", next_pos, nodes[next_pos]);
+      println!("[{:03}] {:?}", next_pos, nodes[next_pos]);
 
       next_pos = match nodes[next_pos] {
          Node::Element(ref _element) => {
@@ -266,11 +266,7 @@ fn parse_toks(nodes: &[Node], elements: &[usize; ELS], toks: &[Tok]) {
                false
             };
 
-            if matched {
-               println!("[{}] {:?} M", tok_pos, tok);
-            } else {
-               println!("[{}] {:?}", tok_pos, tok);
-            }
+            println!("T [{:03}] {:?} M={}", tok_pos, tok, matched);
 
             tok_pos += 1;
             next_pos += 1;
@@ -282,10 +278,12 @@ fn parse_toks(nodes: &[Node], elements: &[usize; ELS], toks: &[Tok]) {
                   match state.list_type {
                      ListType::ZeroOrOne | ListType::Sequence => if !matched {
                         next_pos = state.end;
+                        println!("end");
                      },
                      ListType::Choice => {
                         if matched {
                            next_pos = state.end;
+                           println!("end");
                         } else {
                            tok_pos = state.tok_pos;
                         }
@@ -294,6 +292,7 @@ fn parse_toks(nodes: &[Node], elements: &[usize; ELS], toks: &[Tok]) {
                   }
 
                   if next_pos != state.end {
+                     println!("BREAK {} {}", next_pos, state.end);
                      break;
                   }
 
@@ -304,22 +303,24 @@ fn parse_toks(nodes: &[Node], elements: &[usize; ELS], toks: &[Tok]) {
                   unreachable!();
                }
 
-               states.pop();
+               let el = states.pop();
+               println!("POP {:?}", el);
 
-               let pop = if let Some(state) = states.last() {
+               let pop_again = if let Some(state) = states.last() {
                   state.list_type == ListType::Element
                } else {
                   false
                };
 
-               if pop {
-                  states.pop();
+               if pop_again {
+                  let el = states.pop();
+                  println!("POP {:?}", el);
                }
 
                println!("M {}", matched);
 
                if let Some(state) = states.last_mut() {
-                  next_pos = state.current + 1;
+                  next_pos = state.current;
                } else {
                   return;
                }
@@ -330,8 +331,8 @@ fn parse_toks(nodes: &[Node], elements: &[usize; ELS], toks: &[Tok]) {
       };
 
       if let Some(state) = states.last_mut() {
-         println!("--> {}", next_pos);
          state.current = next_pos;
+         println!("====> {:?}", state);
       } else {
          unreachable!();
       }
