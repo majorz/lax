@@ -9,11 +9,15 @@ use nel::tokenize::*;
 fn main() {
    let mut builder = Builder::new();
 
-   number(&mut builder);
-
-   number_with_integer(&mut builder);
-
-   number_fractional_only(&mut builder);
+   for f in &[
+      single,
+      identifier,
+      number,
+      number_with_integer,
+      number_fractional_only,
+   ] {
+      f(&mut builder);
+   }
 
    let (nodes, elements) = builder.destructure();
 
@@ -29,9 +33,9 @@ fn main() {
       .enumerate()
       .for_each(|(i, pos)| println!("[{:03}] {}", i, pos));
 
-   println!("===");
+   println!("---");
 
-   let source = "100.0";
+   let source = "icons";
 
    let chars: Vec<_> = source.chars().collect();
 
@@ -42,9 +46,26 @@ fn main() {
       .enumerate()
       .for_each(|(i, tok)| println!("[{:03}] {:?}", i, tok));
 
-   println!("---");
+   println!("================");
 
    parse_toks(&nodes, &elements, &toks);
+}
+
+#[cfg_attr(rustfmt, rustfmt_skip)]
+fn single(b: &mut Builder) {
+   b.element(Element::Single)
+      .choice()
+         .reference(Element::Identifier)
+         .reference(Element::Number)
+      .end();
+}
+
+#[cfg_attr(rustfmt, rustfmt_skip)]
+fn identifier(b: &mut Builder) {
+   b.element(Element::Identifier)
+      .sequence()
+         .tok(Tok::Identifier)
+      .end();
 }
 
 #[cfg_attr(rustfmt, rustfmt_skip)]
@@ -218,9 +239,7 @@ fn parse_toks(nodes: &[Node], elements: &[usize; ELS], toks: &[Tok]) {
    let mut tok_pos = 0;
 
    loop {
-      println!("{}", next_pos);
-
-      println!("{:?}", nodes[next_pos]);
+      println!("[{}] {:?}", next_pos, nodes[next_pos]);
 
       next_pos = match nodes[next_pos] {
          Node::Element(ref _element) => {
@@ -248,6 +267,8 @@ fn parse_toks(nodes: &[Node], elements: &[usize; ELS], toks: &[Tok]) {
             };
 
             if matched {
+               println!("[{}] {:?} M", tok_pos, tok);
+            } else {
                println!("[{}] {:?}", tok_pos, tok);
             }
 
@@ -256,7 +277,7 @@ fn parse_toks(nodes: &[Node], elements: &[usize; ELS], toks: &[Tok]) {
 
             loop {
                if let Some(state) = states.last() {
-                  println!("{:?}", state);
+                  println!("<==== {:?}", state);
 
                   match state.list_type {
                      ListType::ZeroOrOne | ListType::Sequence => if !matched {
@@ -295,10 +316,11 @@ fn parse_toks(nodes: &[Node], elements: &[usize; ELS], toks: &[Tok]) {
                   states.pop();
                }
 
+               println!("M {}", matched);
+
                if let Some(state) = states.last_mut() {
                   next_pos = state.current + 1;
                } else {
-                  println!("{}", matched);
                   return;
                }
             }
@@ -308,6 +330,7 @@ fn parse_toks(nodes: &[Node], elements: &[usize; ELS], toks: &[Tok]) {
       };
 
       if let Some(state) = states.last_mut() {
+         println!("--> {}", next_pos);
          state.current = next_pos;
       } else {
          unreachable!();
