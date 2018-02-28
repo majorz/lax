@@ -10,11 +10,16 @@ fn main() {
    let mut builder = Builder::new();
 
    for f in &[
+      expression,
+      nary_right,
+      nary_operator,
       single,
+      parens,
       identifier,
       number,
       number_with_integer,
       number_fractional_only,
+      space,
    ] {
       f(&mut builder);
    }
@@ -52,11 +57,58 @@ fn main() {
 }
 
 #[cfg_attr(rustfmt, rustfmt_skip)]
+fn expression(b: &mut Builder) {
+   b.element(Element::NaryRight)
+      .sequence()
+         .reference(Element::Single)
+//         .zero_or_more()
+         .zero_or_one()
+            .reference(Element::NaryRight)
+         .end()
+      .end();
+}
+
+#[cfg_attr(rustfmt, rustfmt_skip)]
+fn nary_right(b: &mut Builder) {
+   b.element(Element::NaryRight)
+      .sequence()
+         .reference(Element::Space)
+         .reference(Element::NaryOperator)
+         .reference(Element::Space)
+         .reference(Element::Single)
+      .end();
+}
+
+#[cfg_attr(rustfmt, rustfmt_skip)]
+fn nary_operator(b: &mut Builder) {
+   b.element(Element::NaryOperator)
+      .choice()
+         .tok(Tok::Plus)
+         .tok(Tok::Minus)
+         .tok(Tok::Asterisk)
+         .tok(Tok::Slash)
+      .end();
+}
+
+#[cfg_attr(rustfmt, rustfmt_skip)]
 fn single(b: &mut Builder) {
    b.element(Element::Single)
       .choice()
          .reference(Element::Identifier)
          .reference(Element::Number)
+         .reference(Element::Parens)
+      .end();
+}
+
+#[cfg_attr(rustfmt, rustfmt_skip)]
+fn parens(b: &mut Builder) {
+   b.element(Element::Parens)
+      .sequence()
+         .tok(Tok::ParenLeft)
+         .reference(Element::Space)
+         .reference(Element::Expression)
+         .reference(Element::Space)
+         .tok(Tok::ParenRight)
       .end();
 }
 
@@ -100,21 +152,29 @@ fn number_fractional_only(b: &mut Builder) {
       .end();
 }
 
+#[cfg_attr(rustfmt, rustfmt_skip)]
+fn space(b: &mut Builder) {
+   b.element(Element::Space)
+      .zero_or_one()
+         .tok(Tok::Space)
+      .end();
+}
+
 #[derive(Debug, Clone, Copy)]
 enum Element {
-   Number = 0,
+   Expression = 0,
+   NaryRight,
+   NaryOperator,
+   Single,
+   Parens,
+   Identifier,
+   Number,
    NumberWithInteger,
    NumberFractionalOnly,
    Space,
-   Identifier,
-   Single,
-   Parens,
-   Expression,
-   NaryRight,
-   Operators,
 }
 
-const ELS: usize = Element::Operators as usize;
+const ELS: usize = Element::Space as usize + 1;
 
 #[derive(Debug)]
 enum Node {
@@ -235,7 +295,7 @@ impl State {
 fn parse_toks(nodes: &[Node], elements: &[usize; ELS], toks: &[Tok]) {
    let mut states: Vec<State> = Vec::new();
 
-   let mut next_pos = elements[Element::Single as usize];
+   let mut next_pos = elements[Element::Expression as usize];
    let mut tok_pos = 0;
 
    loop {
