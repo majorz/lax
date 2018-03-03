@@ -40,7 +40,7 @@ fn main() {
 
    println!("---");
 
-   let source = "10 + 10";
+   let source = "10 + 10 + 15";
 
    let chars: Vec<_> = source.chars().collect();
 
@@ -61,8 +61,7 @@ fn expression(b: &mut Builder) {
    b.element(Element::Expression)
       .sequence()
          .reference(Element::Single)
-//         .zero_or_more()
-         .zero_or_one()
+         .zero_or_more()
             .reference(Element::NaryRight)
          .end()
       .end();
@@ -184,6 +183,7 @@ enum Node {
    Sequence(usize),
    Choice(usize),
    ZeroOrOne(usize),
+   ZeroOrMore(usize),
 }
 
 struct Builder {
@@ -239,6 +239,11 @@ impl Builder {
       self
    }
 
+   fn zero_or_more(&mut self) -> &mut Self {
+      self.start(Node::ZeroOrMore(0));
+      self
+   }
+
    fn start(&mut self, parent: Node) -> &mut Self {
       self.starts.push(self.nodes.len());
       self.nodes.push(parent);
@@ -255,9 +260,10 @@ impl Builder {
       let end = self.nodes.len();
 
       match *unsafe { self.nodes.get_unchecked_mut(start) } {
-         Node::Sequence(ref mut i) | Node::Choice(ref mut i) | Node::ZeroOrOne(ref mut i) => {
-            *i = end
-         }
+         Node::Sequence(ref mut i)
+         | Node::Choice(ref mut i)
+         | Node::ZeroOrOne(ref mut i)
+         | Node::ZeroOrMore(ref mut i) => *i = end,
          _ => unreachable!(),
       }
 
@@ -267,13 +273,13 @@ impl Builder {
 
 macro_rules! dsp_elm {
    ($elm_pos:expr, $path:expr, $what:expr) => {
-      println!("[{:03}]{} {}", $elm_pos, "..".repeat($path.len() + 1), $what);
+      println!("[{:03}] .{} {}", $elm_pos, "..".repeat($path.len()), $what);
    };
 }
 
 macro_rules! dbg_elm {
    ($elm_pos:expr, $path:expr, $what:expr) => {
-      println!("[{:03}]{} {:?}", $elm_pos, "..".repeat($path.len() + 1), $what);
+      println!("[{:03}] .{} {:?}", $elm_pos, "..".repeat($path.len()), $what);
    };
 }
 
@@ -293,7 +299,7 @@ fn parse_toks(nodes: &[Node], elements: &[usize; ELEMENTS_COUNT], toks: &[Tok]) 
             path.push(elm_pos);
             elm_pos += 1;
          }
-         Node::Sequence(end) | Node::ZeroOrOne(end) => {
+         Node::Sequence(end) | Node::ZeroOrOne(end) | Node::ZeroOrMore(end) => {
             debug_assert!(elm_pos < end);
             path.push(elm_pos);
             elm_pos += 1;
@@ -310,6 +316,7 @@ fn parse_toks(nodes: &[Node], elements: &[usize; ELEMENTS_COUNT], toks: &[Tok]) 
          }
          Node::Tok(ref tok) => {
             let mut matched = if let Some(tok_src) = toks.get(tok_pos) {
+               dsp_elm!(elm_pos, path, format!("TOK {:?}", tok_src));
                tok == tok_src
             } else {
                false
@@ -327,7 +334,11 @@ fn parse_toks(nodes: &[Node], elements: &[usize; ELEMENTS_COUNT], toks: &[Tok]) 
                let pop;
 
                if let Some(pos) = path.last() {
-                  dsp_elm!(*pos, path, format!("?? {:?}", nodes[*pos]));
+                  dsp_elm!(
+                     *pos,
+                     path,
+                     format!("?? {:?} [{:03}] {}", nodes[*pos], elm_pos, matched)
+                  );
 
                   match nodes[*pos] {
                      Node::Element(ref _element) => {
@@ -366,9 +377,23 @@ fn parse_toks(nodes: &[Node], elements: &[usize; ELEMENTS_COUNT], toks: &[Tok]) 
                            dsp_elm!(elm_pos, path, format!("{} 0> {}", elm_pos, end));
                            elm_pos = end;
                            pop = true;
-                        } else if elm_pos == end {
                            matched = true;
+                        } else if elm_pos == end {
                            pop = true;
+                        } else {
+                           break;
+                        }
+                     }
+                     Node::ZeroOrMore(end) => {
+                        if !matched {
+                           dsp_elm!(elm_pos, path, format!("{} *> {}", elm_pos, end));
+                           elm_pos = end;
+                           pop = true;
+                           matched = true;
+                        } else if elm_pos == end {
+                           dsp_elm!(elm_pos, path, format!("{} <* {}", elm_pos, pos));
+                           elm_pos = *pos + 1;
+                           break;
                         } else {
                            break;
                         }
@@ -378,7 +403,7 @@ fn parse_toks(nodes: &[Node], elements: &[usize; ELEMENTS_COUNT], toks: &[Tok]) 
                         elm_pos = pos + 1;
                         pop = true;
                      }
-                     _ => unreachable!()
+                     _ => unreachable!(),
                   }
                } else {
                   dsp_elm!(elm_pos, path, "DONE");
