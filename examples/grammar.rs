@@ -299,12 +299,7 @@ fn parse_toks(nodes: &[Node], elements: &[usize; ELEMENTS_COUNT], toks: &[Tok]) 
             path.push(elm_pos);
             elm_pos += 1;
          }
-         Node::Sequence(end) | Node::ZeroOrOne(end) | Node::ZeroOrMore(end) => {
-            debug_assert!(elm_pos < end);
-            path.push(elm_pos);
-            elm_pos += 1;
-         }
-         Node::Choice(end) => {
+         Node::Sequence(end) | Node::ZeroOrOne(end) | Node::ZeroOrMore(end) | Node::Choice(end) => {
             debug_assert!(elm_pos < end);
             path.push(elm_pos);
             tok_pos_stack.push(tok_pos);
@@ -316,13 +311,15 @@ fn parse_toks(nodes: &[Node], elements: &[usize; ELEMENTS_COUNT], toks: &[Tok]) 
          }
          Node::Tok(ref tok) => {
             let mut matched = if let Some(tok_src) = toks.get(tok_pos) {
-               dsp_elm!(elm_pos, path, format!("TOK {:?}", tok_src));
+               dsp_elm!(
+                  elm_pos,
+                  path,
+                  format!("TOK {:?} [{:03}] {}", tok_src, tok_pos, tok == tok_src)
+               );
                tok == tok_src
             } else {
                false
             };
-
-            dsp_elm!(elm_pos, path, format!("matched is {}", matched));
 
             if matched {
                tok_pos += 1;
@@ -349,8 +346,11 @@ fn parse_toks(nodes: &[Node], elements: &[usize; ELEMENTS_COUNT], toks: &[Tok]) 
                            dsp_elm!(pos, path, format!("{} -> {}", elm_pos, end));
                            elm_pos = end;
                            pop = true;
+                           tok_pos = last_tok_pos(&tok_pos_stack);
+                           tok_pos_stack.pop();
                         } else if elm_pos == end {
                            pop = true;
+                           tok_pos_stack.pop();
                         } else {
                            break;
                         }
@@ -363,12 +363,10 @@ fn parse_toks(nodes: &[Node], elements: &[usize; ELEMENTS_COUNT], toks: &[Tok]) 
                            tok_pos_stack.pop();
                         } else if elm_pos == end {
                            pop = true;
+                           tok_pos = last_tok_pos(&tok_pos_stack);
+                           tok_pos_stack.pop();
                         } else {
-                           if let Some(choice_tok_pos) = tok_pos_stack.last() {
-                              tok_pos = *choice_tok_pos;
-                           } else {
-                              unreachable!();
-                           }
+                           tok_pos = last_tok_pos(&tok_pos_stack);
                            break;
                         }
                      }
@@ -377,9 +375,12 @@ fn parse_toks(nodes: &[Node], elements: &[usize; ELEMENTS_COUNT], toks: &[Tok]) 
                            dsp_elm!(elm_pos, path, format!("{} 0> {}", elm_pos, end));
                            elm_pos = end;
                            pop = true;
+                           tok_pos = last_tok_pos(&tok_pos_stack);
+                           tok_pos_stack.pop();
                            matched = true;
                         } else if elm_pos == end {
                            pop = true;
+                           tok_pos_stack.pop();
                         } else {
                            break;
                         }
@@ -389,10 +390,13 @@ fn parse_toks(nodes: &[Node], elements: &[usize; ELEMENTS_COUNT], toks: &[Tok]) 
                            dsp_elm!(elm_pos, path, format!("{} *> {}", elm_pos, end));
                            elm_pos = end;
                            pop = true;
+                           tok_pos = last_tok_pos(&tok_pos_stack);
+                           tok_pos_stack.pop();
                            matched = true;
                         } else if elm_pos == end {
                            dsp_elm!(elm_pos, path, format!("{} <* {}", elm_pos, pos));
                            elm_pos = *pos + 1;
+                           *tok_pos_stack.last_mut().unwrap() = tok_pos;
                            break;
                         } else {
                            break;
@@ -416,6 +420,14 @@ fn parse_toks(nodes: &[Node], elements: &[usize; ELEMENTS_COUNT], toks: &[Tok]) 
             }
          }
       }
+   }
+}
+
+fn last_tok_pos(tok_pos_stack: &[usize]) -> usize {
+   if let Some(choice_tok_pos) = tok_pos_stack.last() {
+      *choice_tok_pos
+   } else {
+      unreachable!();
    }
 }
 
