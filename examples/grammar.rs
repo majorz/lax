@@ -265,33 +265,6 @@ impl Builder {
    }
 }
 
-#[derive(Debug)]
-struct State {
-   list_type: ListType,
-   current: usize,
-   end: usize,
-   tok_pos: usize,
-}
-
-#[derive(Debug, PartialEq)]
-enum ListType {
-   Element,
-   Sequence,
-   Choice,
-   ZeroOrOne,
-}
-
-impl State {
-   fn new(list_type: ListType, current: usize, end: usize, tok_pos: usize) -> Self {
-      State {
-         list_type,
-         current,
-         end,
-         tok_pos,
-      }
-   }
-}
-
 macro_rules! dsp_elm {
    ($elm_pos:expr, $path:expr, $what:expr) => {
       println!("[{:03}]{} {}", $elm_pos, "..".repeat($path.len() + 1), $what);
