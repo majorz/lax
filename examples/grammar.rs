@@ -40,7 +40,7 @@ fn main() {
 
    println!("---");
 
-   let source = "icons";
+   let source = "10 + 10";
 
    let chars: Vec<_> = source.chars().collect();
 
@@ -58,7 +58,7 @@ fn main() {
 
 #[cfg_attr(rustfmt, rustfmt_skip)]
 fn expression(b: &mut Builder) {
-   b.element(Element::NaryRight)
+   b.element(Element::Expression)
       .sequence()
          .reference(Element::Single)
 //         .zero_or_more()
@@ -174,7 +174,7 @@ enum Element {
    Space,
 }
 
-const ELS: usize = Element::Space as usize + 1;
+const ELEMENTS_COUNT: usize = Element::Space as usize + 1;
 
 #[derive(Debug)]
 enum Node {
@@ -189,7 +189,7 @@ enum Node {
 struct Builder {
    nodes: Vec<Node>,
    starts: Vec<usize>,
-   elements: [usize; ELS],
+   elements: [usize; ELEMENTS_COUNT],
 }
 
 impl Builder {
@@ -197,11 +197,11 @@ impl Builder {
       Builder {
          nodes: Vec::new(),
          starts: Vec::new(),
-         elements: [0; ELS],
+         elements: [0; ELEMENTS_COUNT],
       }
    }
 
-   fn destructure(self) -> (Vec<Node>, [usize; ELS]) {
+   fn destructure(self) -> (Vec<Node>, [usize; ELEMENTS_COUNT]) {
       let Self {
          nodes, elements, ..
       } = self;
@@ -292,33 +292,49 @@ impl State {
    }
 }
 
-fn parse_toks(nodes: &[Node], elements: &[usize; ELS], toks: &[Tok]) {
-   let mut states: Vec<State> = Vec::new();
+macro_rules! dsp_elm {
+   ($elm_pos:expr, $path:expr, $what:expr) => {
+      println!("[{:03}]{} {}", $elm_pos, "..".repeat($path.len() + 1), $what);
+   };
+}
 
-   let mut next_pos = elements[Element::Expression as usize];
+macro_rules! dbg_elm {
+   ($elm_pos:expr, $path:expr, $what:expr) => {
+      println!("[{:03}]{} {:?}", $elm_pos, "..".repeat($path.len() + 1), $what);
+   };
+}
+
+fn parse_toks(nodes: &[Node], elements: &[usize; ELEMENTS_COUNT], toks: &[Tok]) {
+   let mut path: Vec<usize> = Vec::new();
+
+   let mut elm_pos = elements[Element::Expression as usize];
+
    let mut tok_pos = 0;
+   let mut tok_pos_stack: Vec<usize> = Vec::new();
 
    loop {
-      println!("[{:03}] {:?}", next_pos, nodes[next_pos]);
+      dbg_elm!(elm_pos, path, nodes[elm_pos]);
 
-      next_pos = match nodes[next_pos] {
+      match nodes[elm_pos] {
          Node::Element(ref _element) => {
-            states.push(State::new(ListType::Element, next_pos, usize::MAX, tok_pos));
-            next_pos + 1
+            path.push(elm_pos);
+            elm_pos += 1;
          }
-         Node::Sequence(end) => {
-            states.push(State::new(ListType::Sequence, next_pos, end, tok_pos));
-            next_pos + 1
+         Node::Sequence(end) | Node::ZeroOrOne(end) => {
+            debug_assert!(elm_pos < end);
+            path.push(elm_pos);
+            elm_pos += 1;
          }
          Node::Choice(end) => {
-            states.push(State::new(ListType::Choice, next_pos, end, tok_pos));
-            next_pos + 1
+            debug_assert!(elm_pos < end);
+            path.push(elm_pos);
+            tok_pos_stack.push(tok_pos);
+            elm_pos += 1;
          }
-         Node::ZeroOrOne(end) => {
-            states.push(State::new(ListType::ZeroOrOne, next_pos, end, tok_pos));
-            next_pos + 1
+         Node::Reference(ref element) => {
+            path.push(elm_pos);
+            elm_pos = elements[*element as usize];
          }
-         Node::Reference(ref element) => elements[*element as usize],
          Node::Tok(ref tok) => {
             let mut matched = if let Some(tok_src) = toks.get(tok_pos) {
                tok == tok_src
@@ -326,75 +342,81 @@ fn parse_toks(nodes: &[Node], elements: &[usize; ELS], toks: &[Tok]) {
                false
             };
 
-            println!("T [{:03}] {:?} M={}", tok_pos, tok, matched);
+            dsp_elm!(elm_pos, path, format!("matched is {}", matched));
 
-            tok_pos += 1;
-            next_pos += 1;
-
-            loop {
-               if let Some(state) = states.last() {
-                  println!("<==== {:?}", state);
-
-                  match state.list_type {
-                     ListType::ZeroOrOne | ListType::Sequence => if !matched {
-                        next_pos = state.end;
-                        println!("end");
-                     },
-                     ListType::Choice => {
-                        if matched {
-                           next_pos = state.end;
-                           println!("end");
-                        } else {
-                           tok_pos = state.tok_pos;
-                        }
-                     }
-                     ListType::Element => unreachable!(),
-                  }
-
-                  if next_pos != state.end {
-                     println!("BREAK {} {}", next_pos, state.end);
-                     break;
-                  }
-
-                  if state.list_type == ListType::ZeroOrOne && !matched {
-                     matched = true;
-                  }
-               } else {
-                  unreachable!();
-               }
-
-               let el = states.pop();
-               println!("POP {:?}", el);
-
-               let pop_again = if let Some(state) = states.last() {
-                  state.list_type == ListType::Element
-               } else {
-                  false
-               };
-
-               if pop_again {
-                  let el = states.pop();
-                  println!("POP {:?}", el);
-               }
-
-               println!("M {}", matched);
-
-               if let Some(state) = states.last_mut() {
-                  next_pos = state.current;
-               } else {
-                  return;
-               }
+            if matched {
+               tok_pos += 1;
             }
 
-            next_pos
-         }
-      };
+            elm_pos += 1;
 
-      if let Some(state) = states.last_mut() {
-         state.current = next_pos;
-         println!("====> {:?}", state);
-      } else {
-         unreachable!();
+            loop {
+               let pop;
+
+               if let Some(pos) = path.last() {
+                  dsp_elm!(*pos, path, format!("?? {:?}", nodes[*pos]));
+
+                  match nodes[*pos] {
+                     Node::Element(ref _element) => {
+                        pop = true;
+                     }
+                     Node::Sequence(end) => {
+                        if !matched {
+                           dsp_elm!(pos, path, format!("{} -> {}", elm_pos, end));
+                           elm_pos = end;
+                           pop = true;
+                        } else if elm_pos == end {
+                           pop = true;
+                        } else {
+                           break;
+                        }
+                     }
+                     Node::Choice(end) => {
+                        if matched {
+                           dsp_elm!(pos, path, format!("{} |> {}", elm_pos, end));
+                           elm_pos = end;
+                           pop = true;
+                           tok_pos_stack.pop();
+                        } else if elm_pos == end {
+                           pop = true;
+                        } else {
+                           if let Some(choice_tok_pos) = tok_pos_stack.last() {
+                              tok_pos = *choice_tok_pos;
+                           } else {
+                              unreachable!();
+                           }
+                           break;
+                        }
+                     }
+                     Node::ZeroOrOne(end) => {
+                        if !matched {
+                           dsp_elm!(elm_pos, path, format!("{} 0> {}", elm_pos, end));
+                           elm_pos = end;
+                           pop = true;
+                        } else if elm_pos == end {
+                           matched = true;
+                           pop = true;
+                        } else {
+                           break;
+                        }
+                     }
+                     Node::Reference(ref _element) => {
+                        dsp_elm!(elm_pos, path, format!("{} &> {}", elm_pos, pos + 1));
+                        elm_pos = pos + 1;
+                        pop = true;
+                     }
+                     _ => unreachable!()
+                  }
+               } else {
+                  dsp_elm!(elm_pos, path, "DONE");
+                  return;
+               }
+
+               if pop {
+                  path.pop();
+               }
+            }
+         }
       }
    }
 }
