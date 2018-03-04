@@ -13,7 +13,7 @@ fn main() {
       expression,
       nary_right,
       nary_operator,
-      single,
+      unary,
       parens,
       identifier,
       number,
@@ -58,7 +58,7 @@ fn main() {
 fn expression(b: &mut Builder) {
    b.element(Element::Expression)
       .sequence()
-         .reference(Element::Single)
+         .reference(Element::Unary)
          .zero_or_more()
             .reference(Element::NaryRight)
          .end()
@@ -72,7 +72,7 @@ fn nary_right(b: &mut Builder) {
          .reference(Element::Space)
          .reference(Element::NaryOperator)
          .reference(Element::Space)
-         .reference(Element::Single)
+         .reference(Element::Unary)
       .end();
 }
 
@@ -88,8 +88,8 @@ fn nary_operator(b: &mut Builder) {
 }
 
 #[cfg_attr(rustfmt, rustfmt_skip)]
-fn single(b: &mut Builder) {
-   b.element(Element::Single)
+fn unary(b: &mut Builder) {
+   b.element(Element::Unary)
       .choice()
          .reference(Element::Identifier)
          .reference(Element::Number)
@@ -150,7 +150,7 @@ enum Element {
    Expression = 0,
    NaryRight,
    NaryOperator,
-   Single,
+   Unary,
    Parens,
    Identifier,
    Number,
