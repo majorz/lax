@@ -17,8 +17,6 @@ fn main() {
       parens,
       identifier,
       number,
-      number_with_integer,
-      number_fractional_only,
       space,
    ] {
       f(&mut builder);
@@ -123,31 +121,19 @@ fn identifier(b: &mut Builder) {
 fn number(b: &mut Builder) {
    b.element(Element::Number)
       .choice()
-         .reference(Element::NumberWithInteger)
-         .reference(Element::NumberFractionalOnly)
-      .end();
-}
-
-#[cfg_attr(rustfmt, rustfmt_skip)]
-fn number_with_integer(b: &mut Builder) {
-   b.element(Element::NumberWithInteger)
-      .sequence()
-         .tok(Tok::Digits)
-         .zero_or_one()
-            .tok(Tok::FullStop)
+         .sequence()
+            .tok(Tok::Digits)
             .zero_or_one()
-               .tok(Tok::Digits)
+               .tok(Tok::FullStop)
+               .zero_or_one()
+                  .tok(Tok::Digits)
+               .end()
             .end()
          .end()
-      .end();
-}
-
-#[cfg_attr(rustfmt, rustfmt_skip)]
-fn number_fractional_only(b: &mut Builder) {
-   b.element(Element::NumberFractionalOnly)
-      .sequence()
-         .tok(Tok::FullStop)
-         .tok(Tok::Digits)
+         .sequence()
+            .tok(Tok::FullStop)
+            .tok(Tok::Digits)
+         .end()
       .end();
 }
 
@@ -168,8 +154,6 @@ enum Element {
    Parens,
    Identifier,
    Number,
-   NumberWithInteger,
-   NumberFractionalOnly,
    Space,
 }
 
