@@ -1,7 +1,7 @@
-extern crate nel;
+extern crate lax;
 
-use nel::tokenize::*;
-use nel::advancer::*;
+use lax::tokenize::*;
+use lax::advancer::*;
 
 type TokAdvancer<'a> = Advancer<'a, Tok>;
 

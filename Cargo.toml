@@ -1,11 +1,11 @@
 [package]
-name = "nel"
+name = "lax"
 version = "0.0.1"
 authors = ["majorz"]
 description = "Experimental programming language"
-homepage = "https://github.com/majorz/nel"
-repository = "https://github.com/majorz/nel"
-keywords = ["programming-language", "language", "experimental", "functional"]
+homepage = "https://github.com/majorz/lax"
+repository = "https://github.com/majorz/lax"
+keywords = ["programming-language", "language", "functional", "dynamically-typed"]
 license = "Apache-2.0"
 
 [dev-dependencies]

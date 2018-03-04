@@ -1,2 +1,2 @@
-# nel
-Experimental programming language
+# lax
+Dynamically typed programming language

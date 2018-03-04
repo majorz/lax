@@ -1,10 +1,10 @@
 #![allow(dead_code)]
 
-extern crate nel;
+extern crate lax;
 
 use std::usize;
 
-use nel::tokenize::*;
+use lax::tokenize::*;
 
 fn main() {
    let mut builder = Builder::new();

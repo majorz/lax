@@ -1,14 +1,14 @@
-extern crate nel;
+extern crate lax;
 
 use std::fs::File;
 use std::io::prelude::*;
 
-use nel::tokenize::tokenize;
-use nel::indentation::estimate_indentation;
-//use nel::parse::Parser;
+use lax::tokenize::tokenize;
+use lax::indentation::estimate_indentation;
+//use lax::parse::Parser;
 
 fn main() {
-   let mut f = File::open("nel/tokenize.nel").expect("file not found");
+   let mut f = File::open("lax/tokenize.lax").expect("file not found");
 
    let mut source = String::new();
    f.read_to_string(&mut source)

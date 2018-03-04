@@ -1,11 +1,11 @@
 #[macro_use]
 extern crate criterion;
 
-extern crate nel;
+extern crate lax;
 
 use criterion::Criterion;
 
-use nel::advancer::*;
+use lax::advancer::*;
 
 fn chars() -> Vec<char> {
    "aaaaabbbbb".chars().cycle().take(100_000).collect()
