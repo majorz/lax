@@ -3,13 +3,21 @@
 extern crate lax;
 
 use std::usize;
+use std::fs::File;
+use std::io::prelude::*;
 
 use lax::tokenize::*;
+use lax::indentation::estimate_indentation;
 
 fn main() {
    let mut builder = Builder::new();
 
    for f in &[
+      module,
+      block,
+      statement,
+      empty_line,
+      eol,
       expression,
       nary_right,
       nary_operator,
@@ -17,7 +25,6 @@ fn main() {
       parens,
       identifier,
       number,
-      space,
    ] {
       f(&mut builder);
    }
@@ -38,20 +45,95 @@ fn main() {
 
    println!("---");
 
-   let source = "10 + 10 + 15";
+   let mut f = File::open("lax/block.lax").expect("file not found");
+
+   let mut source = String::new();
+   f.read_to_string(&mut source)
+      .expect("something went wrong reading the file");
 
    let chars: Vec<_> = source.chars().collect();
 
-   let (toks, _) = tokenize(&chars);
+   let (toks, toks_meta) = tokenize(&chars);
 
    toks
       .iter()
       .enumerate()
       .for_each(|(i, tok)| println!("[{:03}] {:?}", i, tok));
 
+   println!("---");
+
+   let indentation = match estimate_indentation(&toks, &toks_meta) {
+      Some(indentation) => indentation,
+      None => 0,
+   };
+
+   println!("Indentation: {}", indentation);
+
    println!("================");
 
    parse_toks(&nodes, &elements, &toks);
+}
+
+#[cfg_attr(rustfmt, rustfmt_skip)]
+fn module(b: &mut Builder) {
+   b.element(Element::Module)
+      .zero_or_more()
+         .choice()
+            .reference(Element::Statement)
+            .reference(Element::EmptyLine)
+         .end()
+      .end();
+}
+
+#[cfg_attr(rustfmt, rustfmt_skip)]
+fn block(b: &mut Builder) {
+   b.element(Element::Block)
+      .sequence()
+         .zero_or_more()
+            .reference(Element::EmptyLine)
+         .end()
+         .reference(Element::Statement)
+         .zero_or_more()
+            .choice()
+               .reference(Element::Statement)
+               .reference(Element::EmptyLine)
+            .end()
+         .end()
+      .end();
+}
+
+#[cfg_attr(rustfmt, rustfmt_skip)]
+fn statement(b: &mut Builder) {
+   b.element(Element::Statement)
+      .sequence()
+         .reference(Element::Expression)
+         .skip_space()
+         .reference(Element::EndOfLine)
+      .end();
+}
+
+#[cfg_attr(rustfmt, rustfmt_skip)]
+fn eol(b: &mut Builder) {
+   b.element(Element::EndOfLine)
+      .choice()
+         .tok(Tok::NewLine)
+         .eof()
+      .end();
+}
+
+#[cfg_attr(rustfmt, rustfmt_skip)]
+fn empty_line(b: &mut Builder) {
+   b.element(Element::EmptyLine)
+      .choice()
+         .sequence()
+            .skip_space()
+            .tok(Tok::NewLine)
+         .end()
+         .sequence()
+            .tok(Tok::Space)
+            .eof()
+         .end()
+      .end();
 }
 
 #[cfg_attr(rustfmt, rustfmt_skip)]
@@ -69,9 +151,9 @@ fn expression(b: &mut Builder) {
 fn nary_right(b: &mut Builder) {
    b.element(Element::NaryRight)
       .sequence()
-         .reference(Element::Space)
+         .skip_space()
          .reference(Element::NaryOperator)
-         .reference(Element::Space)
+         .skip_space()
          .reference(Element::Nullary)
       .end();
 }
@@ -102,9 +184,9 @@ fn parens(b: &mut Builder) {
    b.element(Element::Parens)
       .sequence()
          .tok(Tok::ParenLeft)
-         .reference(Element::Space)
+         .skip_space()
          .reference(Element::Expression)
-         .reference(Element::Space)
+         .skip_space()
          .tok(Tok::ParenRight)
       .end();
 }
@@ -137,27 +219,23 @@ fn number(b: &mut Builder) {
       .end();
 }
 
-#[cfg_attr(rustfmt, rustfmt_skip)]
-fn space(b: &mut Builder) {
-   b.element(Element::Space)
-      .zero_or_one()
-         .tok(Tok::Space)
-      .end();
-}
-
 #[derive(Debug, Clone, Copy)]
 enum Element {
-   Expression = 0,
+   Module = 0,
+   Block,
+   Statement,
+   EndOfLine,
+   EmptyLine,
+   Expression,
    NaryRight,
    NaryOperator,
    Nullary,
    Parens,
    Identifier,
    Number,
-   Space,
 }
 
-const ELEMENTS_COUNT: usize = Element::Space as usize + 1;
+const ELEMENTS_COUNT: usize = Element::Number as usize + 1;
 
 #[derive(Debug)]
 enum Node {
@@ -168,6 +246,8 @@ enum Node {
    Choice(usize),
    ZeroOrOne(usize),
    ZeroOrMore(usize),
+   SkipSpace,
+   Eof,
 }
 
 struct Builder {
@@ -195,6 +275,16 @@ impl Builder {
    fn element(&mut self, element: Element) -> &mut Self {
       self.elements[element as usize] = self.nodes.len();
       self.nodes.push(Node::Element(element));
+      self
+   }
+
+   fn skip_space(&mut self) -> &mut Self {
+      self.nodes.push(Node::SkipSpace);
+      self
+   }
+
+   fn eof(&mut self) -> &mut Self {
+      self.nodes.push(Node::Eof);
       self
    }
 
@@ -270,7 +360,7 @@ macro_rules! dbg_elm {
 fn parse_toks(nodes: &[Node], elements: &[usize; ELEMENTS_COUNT], toks: &[Tok]) {
    let mut path: Vec<usize> = Vec::new();
 
-   let mut elm_pos = elements[Element::Expression as usize];
+   let mut elm_pos = elements[Element::Module as usize];
 
    let mut tok_pos = 0;
    let mut tok_pos_stack: Vec<usize> = Vec::new();
@@ -278,23 +368,48 @@ fn parse_toks(nodes: &[Node], elements: &[usize; ELEMENTS_COUNT], toks: &[Tok]) 
    loop {
       dbg_elm!(elm_pos, path, nodes[elm_pos]);
 
+      let mut matched;
+
       match nodes[elm_pos] {
          Node::Element(ref _element) => {
             path.push(elm_pos);
             elm_pos += 1;
+            continue;
          }
          Node::Sequence(end) | Node::ZeroOrOne(end) | Node::ZeroOrMore(end) | Node::Choice(end) => {
             debug_assert!(elm_pos < end);
             path.push(elm_pos);
             tok_pos_stack.push(tok_pos);
             elm_pos += 1;
+            continue;
          }
          Node::Reference(ref element) => {
-            path.push(elm_pos);
-            elm_pos = elements[*element as usize];
+            if tok_pos == toks.len() {
+               matched = false;
+               elm_pos += 1;
+            } else {
+               path.push(elm_pos);
+               elm_pos = elements[*element as usize];
+               continue;
+            }
+         }
+         Node::SkipSpace => {
+            matched = if let Some(tok_src) = toks.get(tok_pos) {
+               &Tok::Space == tok_src
+            } else {
+               false
+            };
+
+            if matched {
+               dsp_elm!(elm_pos, path, format!("Space [{:03}]", tok_pos));
+               tok_pos += 1;
+            }
+
+            elm_pos += 1;
+            continue;
          }
          Node::Tok(ref tok) => {
-            let mut matched = if let Some(tok_src) = toks.get(tok_pos) {
+            matched = if let Some(tok_src) = toks.get(tok_pos) {
                dsp_elm!(
                   elm_pos,
                   path,
@@ -310,98 +425,103 @@ fn parse_toks(nodes: &[Node], elements: &[usize; ELEMENTS_COUNT], toks: &[Tok]) 
             }
 
             elm_pos += 1;
+         }
+         Node::Eof => {
+            matched = tok_pos == toks.len();
 
-            loop {
-               let pop;
+            elm_pos += 1;
+         }
+      }
 
-               if let Some(pos) = path.last() {
-                  dsp_elm!(
-                     *pos,
-                     path,
-                     format!("?? {:?} [{:03}] {}", nodes[*pos], elm_pos, matched)
-                  );
+      loop {
+         let pop;
 
-                  match nodes[*pos] {
-                     Node::Element(ref _element) => {
-                        pop = true;
-                     }
-                     Node::Sequence(end) => {
-                        if !matched {
-                           dsp_elm!(pos, path, format!("{} -> {}", elm_pos, end));
-                           elm_pos = end;
-                           pop = true;
-                           tok_pos = last_tok_pos(&tok_pos_stack);
-                           tok_pos_stack.pop();
-                        } else if elm_pos == end {
-                           pop = true;
-                           tok_pos_stack.pop();
-                        } else {
-                           break;
-                        }
-                     }
-                     Node::Choice(end) => {
-                        if matched {
-                           dsp_elm!(pos, path, format!("{} |> {}", elm_pos, end));
-                           elm_pos = end;
-                           pop = true;
-                           tok_pos_stack.pop();
-                        } else if elm_pos == end {
-                           pop = true;
-                           tok_pos = last_tok_pos(&tok_pos_stack);
-                           tok_pos_stack.pop();
-                        } else {
-                           tok_pos = last_tok_pos(&tok_pos_stack);
-                           break;
-                        }
-                     }
-                     Node::ZeroOrOne(end) => {
-                        if !matched {
-                           dsp_elm!(elm_pos, path, format!("{} 0> {}", elm_pos, end));
-                           elm_pos = end;
-                           pop = true;
-                           tok_pos = last_tok_pos(&tok_pos_stack);
-                           tok_pos_stack.pop();
-                           matched = true;
-                        } else if elm_pos == end {
-                           pop = true;
-                           tok_pos_stack.pop();
-                        } else {
-                           break;
-                        }
-                     }
-                     Node::ZeroOrMore(end) => {
-                        if !matched {
-                           dsp_elm!(elm_pos, path, format!("{} *> {}", elm_pos, end));
-                           elm_pos = end;
-                           pop = true;
-                           tok_pos = last_tok_pos(&tok_pos_stack);
-                           tok_pos_stack.pop();
-                           matched = true;
-                        } else if elm_pos == end {
-                           dsp_elm!(elm_pos, path, format!("{} <* {}", elm_pos, pos));
-                           elm_pos = *pos + 1;
-                           *tok_pos_stack.last_mut().unwrap() = tok_pos;
-                           break;
-                        } else {
-                           break;
-                        }
-                     }
-                     Node::Reference(ref _element) => {
-                        dsp_elm!(elm_pos, path, format!("{} &> {}", elm_pos, pos + 1));
-                        elm_pos = pos + 1;
-                        pop = true;
-                     }
-                     _ => unreachable!(),
+         if let Some(pos) = path.last() {
+            dsp_elm!(
+               *pos,
+               path,
+               format!("?? {:?} [{:03}] {}", nodes[*pos], elm_pos, matched)
+            );
+
+            match nodes[*pos] {
+               Node::Element(ref _element) => {
+                  pop = true;
+               }
+               Node::Sequence(end) => {
+                  if !matched {
+                     dsp_elm!(pos, path, format!("{} -> {}", elm_pos, end));
+                     elm_pos = end;
+                     pop = true;
+                     tok_pos = last_tok_pos(&tok_pos_stack);
+                     tok_pos_stack.pop();
+                  } else if elm_pos == end {
+                     pop = true;
+                     tok_pos_stack.pop();
+                  } else {
+                     break;
                   }
-               } else {
-                  dsp_elm!(elm_pos, path, "DONE");
-                  return;
                }
-
-               if pop {
-                  path.pop();
+               Node::Choice(end) => {
+                  if matched {
+                     dsp_elm!(pos, path, format!("{} |> {}", elm_pos, end));
+                     elm_pos = end;
+                     pop = true;
+                     tok_pos_stack.pop();
+                  } else if elm_pos == end {
+                     pop = true;
+                     tok_pos = last_tok_pos(&tok_pos_stack);
+                     tok_pos_stack.pop();
+                  } else {
+                     tok_pos = last_tok_pos(&tok_pos_stack);
+                     break;
+                  }
                }
+               Node::ZeroOrOne(end) => {
+                  if !matched {
+                     dsp_elm!(elm_pos, path, format!("{} 0> {}", elm_pos, end));
+                     elm_pos = end;
+                     pop = true;
+                     tok_pos = last_tok_pos(&tok_pos_stack);
+                     tok_pos_stack.pop();
+                     matched = true;
+                  } else if elm_pos == end {
+                     pop = true;
+                     tok_pos_stack.pop();
+                  } else {
+                     break;
+                  }
+               }
+               Node::ZeroOrMore(end) => {
+                  if !matched {
+                     dsp_elm!(elm_pos, path, format!("{} *> {}", elm_pos, end));
+                     elm_pos = end;
+                     pop = true;
+                     tok_pos = last_tok_pos(&tok_pos_stack);
+                     tok_pos_stack.pop();
+                     matched = true;
+                  } else if elm_pos == end {
+                     dsp_elm!(elm_pos, path, format!("{} <* {}", elm_pos, pos));
+                     elm_pos = *pos + 1;
+                     *tok_pos_stack.last_mut().unwrap() = tok_pos;
+                     break;
+                  } else {
+                     break;
+                  }
+               }
+               Node::Reference(ref _element) => {
+                  dsp_elm!(elm_pos, path, format!("{} &> {}", elm_pos, pos + 1));
+                  elm_pos = pos + 1;
+                  pop = true;
+               }
+               _ => unreachable!(),
             }
+         } else {
+            dsp_elm!(elm_pos, path, "DONE");
+            return;
+         }
+
+         if pop {
+            path.pop();
          }
       }
    }
