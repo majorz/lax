@@ -13,6 +13,7 @@ use lax::indentation::estimate_indentation;
 const C_RESET: color::Fg<color::Reset> = color::Fg(color::Reset);
 const C_PUNCT: color::Fg<color::Rgb> = color::Fg(color::Rgb(115, 55, 100));
 const C_INDEX: color::Fg<color::Rgb> = color::Fg(color::Rgb(177, 65, 149));
+const C_ELEMENT: color::Fg<color::Rgb> = color::Fg(color::Rgb(236, 50, 0));
 
 macro_rules! dsp_elm {
    ($elm_pos:expr, $path:tt, $what:expr) => {
@@ -462,7 +463,16 @@ fn parse_toks(nodes: &[Node], elements: &[usize; ELEMENTS_COUNT], toks: &[Tok]) 
 
             match nodes[*pos] {
                Node::Element(ref element) => {
-                  dsp_elm!(pos, path, format!("POP {:?}", element));
+                  if matched {
+                     dsp_elm!(
+                        pos,
+                        path,
+                        format!(
+                           "POP {}{:?} [{:03}] {}",
+                           C_ELEMENT, element, tok_pos, C_RESET
+                        )
+                     );
+                  }
                   pop = true;
                }
                Node::Sequence(end) => {
