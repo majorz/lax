@@ -1,11 +1,42 @@
 extern crate lax;
+extern crate termion;
 
 use std::usize;
 use std::fs::File;
 use std::io::prelude::*;
 
+use termion::color;
+
 use lax::tokenize::*;
 use lax::indentation::estimate_indentation;
+
+const C_RESET: color::Fg<color::Reset> = color::Fg(color::Reset);
+const C_PUNCT: color::Fg<color::Rgb> = color::Fg(color::Rgb(115, 55, 100));
+const C_INDEX: color::Fg<color::Rgb> = color::Fg(color::Rgb(177, 65, 149));
+
+macro_rules! dsp_elm {
+   ($elm_pos:expr, $path:tt, $what:expr) => {
+      __printi_elm!("{}.{}{} {}", $elm_pos, $path, $what);
+   };
+}
+
+macro_rules! dbg_elm {
+   ($elm_pos:expr, $path:tt, $what:expr) => {
+      __printi_elm!("{}.{}{} {:?}", $elm_pos, $path, $what);
+   };
+}
+
+macro_rules! __printi_elm {
+   ($fmt:expr, $elm_pos:expr, $path:tt, $what:expr) => {
+      printi!($fmt, $elm_pos, C_PUNCT, "..".repeat($path.len()), C_RESET, $what);
+   };
+}
+
+macro_rules! printi {
+   ($fmt:expr, $pos:tt, $($arg:tt)*) => {
+      println!(concat!("{}[{}{:03}{}]{} ", $fmt), C_PUNCT, C_INDEX, $pos, C_PUNCT, C_RESET, $($arg)*);
+   };
+}
 
 fn main() {
    let mut builder = Builder::new();
@@ -32,14 +63,14 @@ fn main() {
    nodes
       .iter()
       .enumerate()
-      .for_each(|(i, node)| println!("[{:03}] {:?}", i, node));
+      .for_each(|(i, node)| printi!("{:?}", i, node));
 
    println!("---");
 
    elements
       .iter()
       .enumerate()
-      .for_each(|(i, pos)| println!("[{:03}] {}", i, pos));
+      .for_each(|(i, pos)| printi!("{}", i, pos));
 
    println!("---");
 
@@ -56,7 +87,7 @@ fn main() {
    toks
       .iter()
       .enumerate()
-      .for_each(|(i, tok)| println!("[{:03}] {:?}", i, tok));
+      .for_each(|(i, tok)| printi!("{:?}", i, tok));
 
    println!("---");
 
@@ -341,18 +372,6 @@ impl Builder {
 
       self
    }
-}
-
-macro_rules! dsp_elm {
-   ($elm_pos:expr, $path:expr, $what:expr) => {
-      println!("[{:03}] .{} {}", $elm_pos, "..".repeat($path.len()), $what);
-   };
-}
-
-macro_rules! dbg_elm {
-   ($elm_pos:expr, $path:expr, $what:expr) => {
-      println!("[{:03}] .{} {:?}", $elm_pos, "..".repeat($path.len()), $what);
-   };
 }
 
 fn parse_toks(nodes: &[Node], elements: &[usize; ELEMENTS_COUNT], toks: &[Tok]) {

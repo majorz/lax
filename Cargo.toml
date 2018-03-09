@@ -10,6 +10,7 @@ license = "Apache-2.0"
 
 [dev-dependencies]
 criterion = "*"
+termion = "*"
 
 [[bench]]
 name = "tokenize"
