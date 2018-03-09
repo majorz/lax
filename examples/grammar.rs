@@ -444,7 +444,8 @@ fn parse_toks(nodes: &[Node], elements: &[usize; ELEMENTS_COUNT], toks: &[Tok]) 
             );
 
             match nodes[*pos] {
-               Node::Element(ref _element) => {
+               Node::Element(ref element) => {
+                  dsp_elm!(pos, path, format!("POP {:?}", element));
                   pop = true;
                }
                Node::Sequence(end) => {
