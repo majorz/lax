@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-
 extern crate lax;
 
 use std::usize;
