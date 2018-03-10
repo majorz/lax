@@ -11,9 +11,9 @@ use lax::tokenize::*;
 use lax::indentation::estimate_indentation;
 
 const C_RESET: color::Fg<color::Reset> = color::Fg(color::Reset);
+const C_HIGHLIGH: color::Fg<color::Rgb> = color::Fg(color::Rgb(255, 116, 79));
 const C_DOTS: color::Fg<color::Rgb> = color::Fg(color::Rgb(115, 55, 100));
 const C_INDEX: color::Fg<color::Rgb> = color::Fg(color::Rgb(177, 65, 149));
-const C_ELEMENT: color::Fg<color::Rgb> = color::Fg(color::Rgb(255, 116, 79));
 const C_PUNCT: color::Fg<color::Rgb> = color::Fg(color::Rgb(216, 46, 0));
 const C_TEXT: color::Fg<color::Rgb> = color::Fg(color::Rgb(121, 166, 169));
 
@@ -91,7 +91,7 @@ fn main() {
 
    println!(
       "{}Indentation: {}{}{}",
-      C_TEXT, C_ELEMENT, indentation, C_RESET
+      C_TEXT, C_HIGHLIGH, indentation, C_RESET
    );
 
    println!("{}================{}", C_DOTS, C_RESET);
@@ -384,7 +384,15 @@ fn parse_toks(nodes: &[Node], elements: &[usize; ELEMENTS_COUNT], toks: &[Tok]) 
       let mut matched;
 
       match nodes[elm_pos] {
-         Node::Element(ref _element) => {
+         Node::Element(ref element) => {
+            dsp_elm!(
+               elm_pos,
+               path,
+               "{}{:?} [{:03}] >>",
+               C_PUNCT,
+               element,
+               tok_pos
+            );
             path.push(elm_pos);
             elm_pos += 1;
             continue;
@@ -450,43 +458,51 @@ fn parse_toks(nodes: &[Node], elements: &[usize; ELEMENTS_COUNT], toks: &[Tok]) 
       }
 
       loop {
-         let pop;
+         if !path.is_empty() {
+            let pos = *path.last().unwrap();
 
-         if let Some(pos) = path.last() {
             dsp_elm!(
-               *pos,
+               pos,
                path,
                "?? {:?} [{:03}] {}",
-               nodes[*pos],
+               nodes[pos],
                elm_pos,
                matched
             );
 
-            match nodes[*pos] {
+            match nodes[pos] {
                Node::Element(ref element) => {
+                  path.pop();
                   if matched {
                      dsp_elm!(
                         pos,
                         path,
-                        "{}<< {}{:?} {}[{:03}]",
-                        C_PUNCT,
-                        C_ELEMENT,
+                        "{}{:?} {}[{:03}] <<",
+                        C_HIGHLIGH,
                         element,
                         C_PUNCT,
                         tok_pos
                      );
+                  } else {
+                     dsp_elm!(
+                        pos,
+                        path,
+                        "{}{:?} [{:03}] <<",
+                        C_PUNCT,
+                        element,
+                        tok_pos
+                     );
                   }
-                  pop = true;
                }
                Node::Sequence(end) => {
                   if !matched {
                      dsp_elm!(pos, path, "{} -> {}", elm_pos, end);
                      elm_pos = end;
-                     pop = true;
+                     path.pop();
                      tok_pos = last_tok_pos(&tok_pos_stack);
                      tok_pos_stack.pop();
                   } else if elm_pos == end {
-                     pop = true;
+                     path.pop();
                      tok_pos_stack.pop();
                   } else {
                      break;
@@ -496,10 +512,10 @@ fn parse_toks(nodes: &[Node], elements: &[usize; ELEMENTS_COUNT], toks: &[Tok]) 
                   if matched {
                      dsp_elm!(pos, path, "{} |> {}", elm_pos, end);
                      elm_pos = end;
-                     pop = true;
+                     path.pop();
                      tok_pos_stack.pop();
                   } else if elm_pos == end {
-                     pop = true;
+                     path.pop();
                      tok_pos = last_tok_pos(&tok_pos_stack);
                      tok_pos_stack.pop();
                   } else {
@@ -511,12 +527,12 @@ fn parse_toks(nodes: &[Node], elements: &[usize; ELEMENTS_COUNT], toks: &[Tok]) 
                   if !matched {
                      dsp_elm!(elm_pos, path, "{} 0> {}", elm_pos, end);
                      elm_pos = end;
-                     pop = true;
+                     path.pop();
                      tok_pos = last_tok_pos(&tok_pos_stack);
                      tok_pos_stack.pop();
                      matched = true;
                   } else if elm_pos == end {
-                     pop = true;
+                     path.pop();
                      tok_pos_stack.pop();
                   } else {
                      break;
@@ -526,13 +542,13 @@ fn parse_toks(nodes: &[Node], elements: &[usize; ELEMENTS_COUNT], toks: &[Tok]) 
                   if !matched {
                      dsp_elm!(elm_pos, path, "{} *> {}", elm_pos, end);
                      elm_pos = end;
-                     pop = true;
+                     path.pop();
                      tok_pos = last_tok_pos(&tok_pos_stack);
                      tok_pos_stack.pop();
                      matched = true;
                   } else if elm_pos == end {
                      dsp_elm!(elm_pos, path, "{} <* {}", elm_pos, pos);
-                     elm_pos = *pos + 1;
+                     elm_pos = pos + 1;
                      *tok_pos_stack.last_mut().unwrap() = tok_pos;
                      break;
                   } else {
@@ -542,17 +558,13 @@ fn parse_toks(nodes: &[Node], elements: &[usize; ELEMENTS_COUNT], toks: &[Tok]) 
                Node::Reference(ref _element) => {
                   dsp_elm!(elm_pos, path, "{} &> {}", elm_pos, pos + 1);
                   elm_pos = pos + 1;
-                  pop = true;
+                  path.pop();
                }
                _ => unreachable!(),
             }
          } else {
-            dsp_elm!(elm_pos, path, "{}", "DONE");
+            dsp_elm!(elm_pos, path, "{}", "FI");
             return;
-         }
-
-         if pop {
-            path.pop();
          }
       }
    }
