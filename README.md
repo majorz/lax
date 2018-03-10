@@ -1,2 +1,2 @@
 # lax
-Dynamically typed programming language
+Dynamically typed experimental toy programming language
