@@ -44,7 +44,9 @@ fn main() {
       nary_operator,
       nullary,
       parens,
+      not,
       identifier,
+      boolean,
       number,
    ] {
       f(&mut builder);
@@ -110,7 +112,9 @@ enum Element {
    NaryOperator,
    Nullary,
    Parens,
+   Not,
    Identifier,
+   Boolean,
    Number,
 }
 
@@ -228,6 +232,8 @@ fn nary_operator(b: &mut Builder) {
          .tok(Tok::Minus)
          .tok(Tok::Asterisk)
          .tok(Tok::Slash)
+         .tok(Tok::And)
+         .tok(Tok::Or)
       .end();
 }
 
@@ -235,9 +241,21 @@ fn nary_operator(b: &mut Builder) {
 fn nullary(b: &mut Builder) {
    b.element(Element::Nullary)
       .choice()
-         .reference(Element::Identifier)
-         .reference(Element::Number)
          .reference(Element::Parens)
+         .reference(Element::Not)
+         .reference(Element::Identifier)
+         .reference(Element::Boolean)
+         .reference(Element::Number)
+      .end();
+}
+
+#[cfg_attr(rustfmt, rustfmt_skip)]
+fn not(b: &mut Builder) {
+   b.element(Element::Not)
+      .sequence()
+         .tok(Tok::Not)
+         .skip_space()
+         .reference(Element::Nullary)
       .end();
 }
 
@@ -258,6 +276,15 @@ fn identifier(b: &mut Builder) {
    b.element(Element::Identifier)
       .sequence()
          .tok(Tok::Identifier)
+      .end();
+}
+
+#[cfg_attr(rustfmt, rustfmt_skip)]
+fn boolean(b: &mut Builder) {
+   b.element(Element::Boolean)
+      .choice()
+         .tok(Tok::True)
+         .tok(Tok::False)
       .end();
 }
 
