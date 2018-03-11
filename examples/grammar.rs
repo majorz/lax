@@ -488,7 +488,15 @@ fn parse_toks(nodes: &[Node], elements: &[usize; ELEMENTS_COUNT], toks: &[Tok]) 
                      );
                   } else {
                      debug_assert!(element_tok_pos == tok_pos);
-                     dsp_elm!(pos, path, "{}{:?} [{:03}-{:03}] <<", C_PUNCT, element, element_tok_pos, tok_pos);
+                     dsp_elm!(
+                        pos,
+                        path,
+                        "{}{:?} [{:03}-{:03}] <<",
+                        C_PUNCT,
+                        element,
+                        element_tok_pos,
+                        tok_pos
+                     );
                   }
                }
                Node::Sequence(end) => {
