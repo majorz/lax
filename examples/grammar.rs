@@ -11,7 +11,7 @@ use lax::tokenize::*;
 use lax::indentation::estimate_indentation;
 
 const C_RESET: color::Fg<color::Reset> = color::Fg(color::Reset);
-const C_HIGHLIGH: color::Fg<color::Rgb> = color::Fg(color::Rgb(255, 116, 79));
+const C_HIGHLIGHT: color::Fg<color::Rgb> = color::Fg(color::Rgb(255, 116, 79));
 const C_DOTS: color::Fg<color::Rgb> = color::Fg(color::Rgb(115, 55, 100));
 const C_INDEX: color::Fg<color::Rgb> = color::Fg(color::Rgb(177, 65, 149));
 const C_PUNCT: color::Fg<color::Rgb> = color::Fg(color::Rgb(216, 46, 0));
@@ -34,6 +34,7 @@ fn main() {
 
    for f in &[
       module,
+      if_,
       block,
       statement,
       empty_line,
@@ -84,20 +85,39 @@ fn main() {
 
    println!("{}----------------{}", C_DOTS, C_RESET);
 
-   let indentation = match estimate_indentation(&toks, &toks_meta) {
-      Some(indentation) => indentation,
-      None => 0,
+   let step = match estimate_indentation(&toks, &toks_meta) {
+      Some(step) => step,
+      None => 1,
    };
 
    println!(
       "{}Indentation: {}{}{}",
-      C_TEXT, C_HIGHLIGH, indentation, C_RESET
+      C_TEXT, C_HIGHLIGHT, step, C_RESET
    );
 
    println!("{}================{}", C_DOTS, C_RESET);
 
-   parse_toks(&nodes, &elements, &toks);
+   parse_toks(&nodes, &elements, &toks, &toks_meta, step);
 }
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+enum Element {
+   Module = 0,
+   If,
+   Block,
+   Statement,
+   EndOfLine,
+   EmptyLine,
+   Expression,
+   NaryRight,
+   NaryOperator,
+   Nullary,
+   Parens,
+   Identifier,
+   Number,
+}
+
+const ELEMENTS_COUNT: usize = Element::Number as usize + 1;
 
 #[cfg_attr(rustfmt, rustfmt_skip)]
 fn module(b: &mut Builder) {
@@ -107,6 +127,18 @@ fn module(b: &mut Builder) {
             .reference(Element::Statement)
             .reference(Element::EmptyLine)
          .end()
+      .end();
+}
+
+#[cfg_attr(rustfmt, rustfmt_skip)]
+fn if_(b: &mut Builder) {
+   b.element(Element::If)
+      .sequence()
+         .tok(Tok::If)
+         .skip_space()
+         .reference(Element::Expression)
+         .reference(Element::EndOfLine)
+         .reference(Element::Block)
       .end();
 }
 
@@ -131,18 +163,26 @@ fn block(b: &mut Builder) {
 fn statement(b: &mut Builder) {
    b.element(Element::Statement)
       .sequence()
-         .reference(Element::Expression)
-         .skip_space()
-         .reference(Element::EndOfLine)
+         .indentation(0)
+         .choice()
+            .reference(Element::If)
+            .sequence()
+               .reference(Element::Expression)
+               .reference(Element::EndOfLine)
+            .end()
+         .end()
       .end();
 }
 
 #[cfg_attr(rustfmt, rustfmt_skip)]
 fn eol(b: &mut Builder) {
    b.element(Element::EndOfLine)
-      .choice()
-         .tok(Tok::NewLine)
-         .eof()
+      .sequence()
+         .skip_space()
+         .choice()
+            .tok(Tok::NewLine)
+            .eof()
+         .end()
       .end();
 }
 
@@ -244,24 +284,6 @@ fn number(b: &mut Builder) {
       .end();
 }
 
-#[derive(Debug, Clone, Copy)]
-enum Element {
-   Module = 0,
-   Block,
-   Statement,
-   EndOfLine,
-   EmptyLine,
-   Expression,
-   NaryRight,
-   NaryOperator,
-   Nullary,
-   Parens,
-   Identifier,
-   Number,
-}
-
-const ELEMENTS_COUNT: usize = Element::Number as usize + 1;
-
 #[derive(Debug)]
 enum Node {
    Element(Element),
@@ -271,7 +293,7 @@ enum Node {
    Choice(usize),
    ZeroOrOne(usize),
    ZeroOrMore(usize),
-   SkipSpace,
+   Indentation(usize),
    Eof,
 }
 
@@ -304,7 +326,11 @@ impl Builder {
    }
 
    fn skip_space(&mut self) -> &mut Self {
-      self.nodes.push(Node::SkipSpace);
+      self.zero_or_one().tok(Tok::Space).end()
+   }
+
+   fn indentation(&mut self, offset: usize) -> &mut Self {
+      self.nodes.push(Node::Indentation(offset));
       self
    }
 
@@ -370,13 +396,15 @@ impl Builder {
    }
 }
 
-fn parse_toks(nodes: &[Node], elements: &[usize; ELEMENTS_COUNT], toks: &[Tok]) {
+fn parse_toks(nodes: &[Node], elements: &[usize; ELEMENTS_COUNT], toks: &[Tok], toks_meta: &[TokMeta], step: usize) {
    let mut path: Vec<usize> = Vec::new();
 
    let mut elm_pos = elements[Element::Module as usize];
 
    let mut tok_pos = 0;
    let mut tok_pos_stack: Vec<usize> = Vec::new();
+
+   let mut indentation = 0;
 
    loop {
       dsp_elm!(elm_pos, path, "{:?}", nodes[elm_pos]);
@@ -393,6 +421,9 @@ fn parse_toks(nodes: &[Node], elements: &[usize; ELEMENTS_COUNT], toks: &[Tok]) 
                element,
                tok_pos
             );
+            if element == &Element::Block {
+               indentation += 1;
+            }
             path.push(elm_pos);
             tok_pos_stack.push(tok_pos);
             elm_pos += 1;
@@ -415,41 +446,57 @@ fn parse_toks(nodes: &[Node], elements: &[usize; ELEMENTS_COUNT], toks: &[Tok]) 
                continue;
             }
          }
-         Node::SkipSpace => {
+         Node::Tok(ref tok) => {
             matched = if let Some(tok_src) = toks.get(tok_pos) {
-               &Tok::Space == tok_src
+               let equal = tok == tok_src;
+               if equal {
+                  dsp_elm!(
+                     elm_pos,
+                     path,
+                     "{}TOK {:?} [{:03}]",
+                     C_HIGHLIGHT,
+                     tok_src,
+                     tok_pos
+                  );
+               } else {
+                  dsp_elm!(
+                     elm_pos,
+                     path,
+                     "TOK {:?} [{:03}]",
+                     tok_src,
+                     tok_pos
+                  );
+               }
+               equal
             } else {
                false
             };
 
             if matched {
-               dsp_elm!(elm_pos, path, "Space [{:03}]", tok_pos);
+               tok_pos += 1;
+            }
+
+            elm_pos += 1;
+         }
+         Node::Indentation(offset) => {
+            matched = if tok_pos < toks.len() {
+               let equal = toks[tok_pos] == Tok::Space && toks_meta[tok_pos].span == (indentation + offset) * step;
+               if equal {
+                  dsp_elm!(elm_pos, path, "{}Indentation {} [{:03}]", C_HIGHLIGHT, toks_meta[tok_pos].span, tok_pos);
+               } else {
+                  dsp_elm!(elm_pos, path, "Indentation {} [{:03}]", toks_meta[tok_pos].span, tok_pos);
+               }
+               equal
+            } else {
+               false
+            };
+
+            if matched {
                tok_pos += 1;
             }
 
             elm_pos += 1;
             continue;
-         }
-         Node::Tok(ref tok) => {
-            matched = if let Some(tok_src) = toks.get(tok_pos) {
-               dsp_elm!(
-                  elm_pos,
-                  path,
-                  "TOK {:?} [{:03}] {}",
-                  tok_src,
-                  tok_pos,
-                  tok == tok_src
-               );
-               tok == tok_src
-            } else {
-               false
-            };
-
-            if matched {
-               tok_pos += 1;
-            }
-
-            elm_pos += 1;
          }
          Node::Eof => {
             matched = tok_pos == toks.len();
@@ -473,6 +520,9 @@ fn parse_toks(nodes: &[Node], elements: &[usize; ELEMENTS_COUNT], toks: &[Tok]) 
 
             match nodes[pos] {
                Node::Element(ref element) => {
+                  if element == &Element::Block {
+                     indentation -= 1;
+                  }
                   path.pop();
                   let element_tok_pos = pop_tok_pos(&mut tok_pos_stack);
                   if matched {
@@ -480,7 +530,7 @@ fn parse_toks(nodes: &[Node], elements: &[usize; ELEMENTS_COUNT], toks: &[Tok]) 
                         pos,
                         path,
                         "{}{:?} {}[{:03}-{:03}] <<",
-                        C_HIGHLIGH,
+                        C_HIGHLIGHT,
                         element,
                         C_PUNCT,
                         element_tok_pos,
