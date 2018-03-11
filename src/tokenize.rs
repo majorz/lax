@@ -43,6 +43,7 @@ pub enum Tok {
    In,
    Fn,
    Or,
+   And,
    For,
    Not,
    Ret,
@@ -113,6 +114,11 @@ fn try_keyword(advancer: &CharAdvancer) -> Tok {
          _ => {}
       },
       3 => {
+         if unsafe {
+            *w.get_unchecked(0) == 'a' && *w.get_unchecked(1) == 'n' && *w.get_unchecked(2) == 'd'
+         } {
+            return Tok::And;
+         }
          if unsafe {
             *w.get_unchecked(0) == 'f' && *w.get_unchecked(1) == 'o' && *w.get_unchecked(2) == 'r'
          } {
@@ -514,6 +520,7 @@ mod tests {
       m!(identifier, "in", Tok::In, 2);
       m!(identifier, "fn", Tok::Fn, 2);
       m!(identifier, "or", Tok::Or, 2);
+      m!(identifier, "and", Tok::And, 3);
       m!(identifier, "for", Tok::For, 3);
       m!(identifier, "not", Tok::Not, 3);
       m!(identifier, "ret", Tok::Ret, 3);
