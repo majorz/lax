@@ -225,8 +225,8 @@ impl<'s> Tokenizer<'s> {
       let span = end - self.end;
 
       self.toks_meta.push(TokMeta {
-         span: span,
-         end: end,
+         span,
+         end,
          line: self.line,
          col: self.col,
       });

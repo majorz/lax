@@ -8,7 +8,7 @@ pub struct Advancer<'s, T: 's> {
 impl<'s, T> Advancer<'s, T> {
    pub fn new(slice: &'s [T]) -> Self {
       Advancer {
-         slice: slice,
+         slice,
          start: 0,
          peek: 0,
       }
