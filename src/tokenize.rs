@@ -48,7 +48,9 @@ pub enum Tok {
    Not,
    Ret,
    Loop,
+   True,
    Break,
+   False,
    Match,
 }
 
@@ -142,6 +144,12 @@ fn try_keyword(advancer: &CharAdvancer) -> Tok {
          } {
             return Tok::Loop;
          }
+         if unsafe {
+            *w.get_unchecked(0) == 't' && *w.get_unchecked(1) == 'r' && *w.get_unchecked(2) == 'u'
+               && *w.get_unchecked(3) == 'e'
+         } {
+            return Tok::True;
+         }
       }
       5 => {
          if unsafe {
@@ -149,6 +157,12 @@ fn try_keyword(advancer: &CharAdvancer) -> Tok {
                && *w.get_unchecked(3) == 'a' && *w.get_unchecked(4) == 'k'
          } {
             return Tok::Break;
+         }
+         if unsafe {
+            *w.get_unchecked(0) == 'f' && *w.get_unchecked(1) == 'a' && *w.get_unchecked(2) == 'l'
+               && *w.get_unchecked(3) == 's' && *w.get_unchecked(4) == 'e'
+         } {
+            return Tok::False;
          }
          if unsafe {
             *w.get_unchecked(0) == 'm' && *w.get_unchecked(1) == 'a' && *w.get_unchecked(2) == 't'
@@ -525,7 +539,9 @@ mod tests {
       m!(identifier, "not", Tok::Not, 3);
       m!(identifier, "ret", Tok::Ret, 3);
       m!(identifier, "loop", Tok::Loop, 4);
+      m!(identifier, "true", Tok::True, 4);
       m!(identifier, "break", Tok::Break, 5);
+      m!(identifier, "false", Tok::False, 5);
       m!(identifier, "match", Tok::Match, 5);
    }
 
