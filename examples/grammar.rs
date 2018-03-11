@@ -90,10 +90,7 @@ fn main() {
       None => 1,
    };
 
-   println!(
-      "{}Indentation: {}{}{}",
-      C_TEXT, C_HIGHLIGHT, step, C_RESET
-   );
+   println!("{}Indentation: {}{}{}", C_TEXT, C_HIGHLIGHT, step, C_RESET);
 
    println!("{}================{}", C_DOTS, C_RESET);
 
@@ -396,7 +393,14 @@ impl Builder {
    }
 }
 
-fn parse_toks(nodes: &[Node], elements: &[usize; ELEMENTS_COUNT], toks: &[Tok], toks_meta: &[TokMeta], step: usize) {
+#[cfg_attr(feature = "cargo-clippy", allow(cyclomatic_complexity))]
+fn parse_toks(
+   nodes: &[Node],
+   elements: &[usize; ELEMENTS_COUNT],
+   toks: &[Tok],
+   toks_meta: &[TokMeta],
+   step: usize,
+) {
    let mut path: Vec<usize> = Vec::new();
 
    let mut elm_pos = elements[Element::Module as usize];
@@ -459,13 +463,7 @@ fn parse_toks(nodes: &[Node], elements: &[usize; ELEMENTS_COUNT], toks: &[Tok], 
                      tok_pos
                   );
                } else {
-                  dsp_elm!(
-                     elm_pos,
-                     path,
-                     "TOK {:?} [{:03}]",
-                     tok_src,
-                     tok_pos
-                  );
+                  dsp_elm!(elm_pos, path, "TOK {:?} [{:03}]", tok_src, tok_pos);
                }
                equal
             } else {
@@ -480,11 +478,25 @@ fn parse_toks(nodes: &[Node], elements: &[usize; ELEMENTS_COUNT], toks: &[Tok], 
          }
          Node::Indentation(offset) => {
             matched = if tok_pos < toks.len() {
-               let equal = toks[tok_pos] == Tok::Space && toks_meta[tok_pos].span == (indentation + offset) * step;
+               let equal = toks[tok_pos] == Tok::Space
+                  && toks_meta[tok_pos].span == (indentation + offset) * step;
                if equal {
-                  dsp_elm!(elm_pos, path, "{}Indentation {} [{:03}]", C_HIGHLIGHT, toks_meta[tok_pos].span, tok_pos);
+                  dsp_elm!(
+                     elm_pos,
+                     path,
+                     "{}Indentation {} [{:03}]",
+                     C_HIGHLIGHT,
+                     toks_meta[tok_pos].span,
+                     tok_pos
+                  );
                } else {
-                  dsp_elm!(elm_pos, path, "Indentation {} [{:03}]", toks_meta[tok_pos].span, tok_pos);
+                  dsp_elm!(
+                     elm_pos,
+                     path,
+                     "Indentation {} [{:03}]",
+                     toks_meta[tok_pos].span,
+                     tok_pos
+                  );
                }
                equal
             } else {
