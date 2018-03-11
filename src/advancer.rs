@@ -18,6 +18,10 @@ impl<'s, T> Advancer<'s, T> {
       self.peek
    }
 
+   pub fn current(&self) -> &'s [T] {
+      &self.slice[self.start..self.peek]
+   }
+
    pub fn advance(&mut self, pos: usize) {
       debug_assert!(self.slice.len() >= pos);
       debug_assert!(pos > self.peek);

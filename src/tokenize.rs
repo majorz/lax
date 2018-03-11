@@ -37,6 +37,18 @@ pub enum Tok {
    Text,
    Identifier,
    Digits,
+   Ef,
+   El,
+   If,
+   In,
+   Fn,
+   Or,
+   For,
+   Not,
+   Ret,
+   Loop,
+   Break,
+   Match,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -72,7 +84,77 @@ fn identifier(advancer: &mut CharAdvancer) -> TokMatch {
       }) as FnMatcher,
    );
 
-   Some((Tok::Identifier, advancer.consume()))
+   let tok = try_keyword(advancer);
+
+   Some((tok, advancer.consume()))
+}
+
+fn try_keyword(advancer: &CharAdvancer) -> Tok {
+   let w = advancer.current();
+   let len = w.len();
+   match len {
+      2 => match unsafe { *w.get_unchecked(0) } {
+         'e' => match unsafe { *w.get_unchecked(1) } {
+            'f' => return Tok::Ef,
+            'l' => return Tok::El,
+            _ => {}
+         },
+         'i' => match unsafe { *w.get_unchecked(1) } {
+            'f' => return Tok::If,
+            'n' => return Tok::In,
+            _ => {}
+         },
+         'f' => if unsafe { *w.get_unchecked(1) == 'n' } {
+            return Tok::Fn;
+         },
+         'o' => if unsafe { *w.get_unchecked(1) == 'r' } {
+            return Tok::Or;
+         },
+         _ => {}
+      },
+      3 => {
+         if unsafe {
+            *w.get_unchecked(0) == 'f' && *w.get_unchecked(1) == 'o' && *w.get_unchecked(2) == 'r'
+         } {
+            return Tok::For;
+         }
+         if unsafe {
+            *w.get_unchecked(0) == 'n' && *w.get_unchecked(1) == 'o' && *w.get_unchecked(2) == 't'
+         } {
+            return Tok::Not;
+         }
+         if unsafe {
+            *w.get_unchecked(0) == 'r' && *w.get_unchecked(1) == 'e' && *w.get_unchecked(2) == 't'
+         } {
+            return Tok::Ret;
+         }
+      }
+      4 => {
+         if unsafe {
+            *w.get_unchecked(0) == 'l' && *w.get_unchecked(1) == 'o' && *w.get_unchecked(2) == 'o'
+               && *w.get_unchecked(3) == 'p'
+         } {
+            return Tok::Loop;
+         }
+      }
+      5 => {
+         if unsafe {
+            *w.get_unchecked(0) == 'b' && *w.get_unchecked(1) == 'r' && *w.get_unchecked(2) == 'e'
+               && *w.get_unchecked(3) == 'a' && *w.get_unchecked(4) == 'k'
+         } {
+            return Tok::Break;
+         }
+         if unsafe {
+            *w.get_unchecked(0) == 'm' && *w.get_unchecked(1) == 'a' && *w.get_unchecked(2) == 't'
+               && *w.get_unchecked(3) == 'c' && *w.get_unchecked(4) == 'h'
+         } {
+            return Tok::Match;
+         }
+      }
+      _ => {}
+   }
+
+   Tok::Identifier
 }
 
 fn digits(advancer: &mut CharAdvancer) -> TokMatch {
@@ -423,6 +505,21 @@ mod tests {
       m!(identifier, "a100.", Tok::Identifier, 4);
       m!(identifier, "a_a_a.", Tok::Identifier, 5);
       m!(identifier, "aЯ", Tok::Identifier, 1);
+      m!(identifier, "efx", Tok::Identifier, 3);
+      m!(identifier, "ef ", Tok::Ef, 2);
+      m!(identifier, "ef/", Tok::Ef, 2);
+      m!(identifier, "ef", Tok::Ef, 2);
+      m!(identifier, "el", Tok::El, 2);
+      m!(identifier, "if", Tok::If, 2);
+      m!(identifier, "in", Tok::In, 2);
+      m!(identifier, "fn", Tok::Fn, 2);
+      m!(identifier, "or", Tok::Or, 2);
+      m!(identifier, "for", Tok::For, 3);
+      m!(identifier, "not", Tok::Not, 3);
+      m!(identifier, "ret", Tok::Ret, 3);
+      m!(identifier, "loop", Tok::Loop, 4);
+      m!(identifier, "break", Tok::Break, 5);
+      m!(identifier, "match", Tok::Match, 5);
    }
 
    #[test]
