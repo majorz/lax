@@ -68,10 +68,28 @@ type CharAdvancer<'a> = Advancer<'a, char>;
 
 type FnMatcher = fn(&char) -> bool;
 
-fn space(advancer: &mut CharAdvancer) -> TokMatch {
-   advancer.one_or_more(' ')?;
+fn space_new_line(advancer: &mut CharAdvancer) -> TokMatch {
+   let pos_start = advancer.pos();
+   advancer.zero_or_more(' ');
 
-   Some((Tok::Space, advancer.consume()))
+   let pos_after_space = advancer.pos();
+   advancer.zero_or_one('\r');
+
+   let pos_after_r = advancer.pos();
+   if pos_after_r != pos_after_space {
+      advancer.zero_or_one('\n');
+      Some((Tok::NewLine, advancer.consume()))
+   } else {
+      advancer.zero_or_one('\n');
+
+      if pos_after_r != advancer.pos() {
+         Some((Tok::NewLine, advancer.consume()))
+      } else if pos_after_space != pos_start {
+         Some((Tok::Space, advancer.consume()))
+      } else {
+         None
+      }
+   }
 }
 
 fn identifier(advancer: &mut CharAdvancer) -> TokMatch {
@@ -202,9 +220,6 @@ macro_rules! exact {
    };
 }
 
-exact!('\n', new_line_n, Tok::NewLine);
-exact!('\r', '\n', new_line_rn, Tok::NewLine);
-exact!('\r', new_line_r, Tok::NewLine);
 exact!('*', '*', double_asterisk, Tok::DoubleAsterisk);
 exact!('=', '=', double_equals, Tok::DoubleEquals);
 exact!('!', '=', exclamation_equals, Tok::ExclamationEquals);
@@ -234,10 +249,7 @@ exact!('{', curly_bracket_left, Tok::CurlyBracketLeft);
 exact!('}', curly_backet_right, Tok::CurlyBracketRight);
 
 const MATCHERS: &[fn(advancer: &mut CharAdvancer) -> TokMatch] = &[
-   space,
-   new_line_n,
-   new_line_rn,
-   new_line_r,
+   space_new_line,
    double_asterisk,
    double_equals,
    exclamation_equals,
@@ -485,9 +497,6 @@ mod tests {
       m!(asterisk, "*", Tok::Asterisk, 1);
       m!(double_asterisk, "**", Tok::DoubleAsterisk, 2);
       m!(double_asterisk, "****", Tok::DoubleAsterisk, 2);
-      m!(new_line_n, "\n\n", Tok::NewLine, 1);
-      m!(new_line_rn, "\r\n", Tok::NewLine, 2);
-      m!(new_line_r, "\r\r", Tok::NewLine, 1);
    }
 
    #[test]
@@ -499,14 +508,26 @@ mod tests {
    }
 
    #[test]
+   fn test_new_line() {
+      m!(space_new_line, "  \n", Tok::NewLine, 3);
+      m!(space_new_line, "\n  ", Tok::NewLine, 1);
+      m!(space_new_line, "\n\n", Tok::NewLine, 1);
+      m!(space_new_line, "\r\n", Tok::NewLine, 2);
+      m!(space_new_line, "\r\r", Tok::NewLine, 1);
+      m!(space_new_line, "\r\n", Tok::NewLine, 2);
+      m!(space_new_line, "  \n    ", Tok::NewLine, 3);
+      m!(space_new_line, "  \r\n\n", Tok::NewLine, 4);
+   }
+
+   #[test]
    fn test_space() {
-      m!(space, "");
-      m!(space, "-");
-      m!(space, "- ");
-      m!(space, " ", Tok::Space, 1);
-      m!(space, " -", Tok::Space, 1);
-      m!(space, "   ", Tok::Space, 3);
-      m!(space, "   -", Tok::Space, 3);
+      m!(space_new_line, "");
+      m!(space_new_line, "-");
+      m!(space_new_line, "- ");
+      m!(space_new_line, " ", Tok::Space, 1);
+      m!(space_new_line, " -", Tok::Space, 1);
+      m!(space_new_line, "   ", Tok::Space, 3);
+      m!(space_new_line, "   -", Tok::Space, 3);
    }
 
    #[test]

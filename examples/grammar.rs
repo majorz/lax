@@ -37,7 +37,6 @@ fn main() {
       if_,
       block,
       statement,
-      empty_line,
       eol,
       expression,
       nary_right,
@@ -87,6 +86,13 @@ fn main() {
 
    println!("{}----------------{}", C_DOTS, C_RESET);
 
+   toks_meta
+      .iter()
+      .enumerate()
+      .for_each(|(i, tok_meta)| printi!("{}{:?}{}", i, C_TEXT, tok_meta, C_RESET));
+
+   println!("{}----------------{}", C_DOTS, C_RESET);
+
    let step = match estimate_indentation(&toks, &toks_meta) {
       Some(step) => step,
       None => 1,
@@ -106,7 +112,6 @@ enum Element {
    Block,
    Statement,
    EndOfLine,
-   EmptyLine,
    Expression,
    NaryRight,
    NaryOperator,
@@ -126,7 +131,7 @@ fn module(b: &mut Builder) {
       .zero_or_more()
          .choice()
             .reference(Element::Statement)
-            .reference(Element::EmptyLine)
+            .reference(Element::EndOfLine)
          .end()
       .end();
 }
@@ -148,13 +153,13 @@ fn block(b: &mut Builder) {
    b.element(Element::Block)
       .sequence()
          .zero_or_more()
-            .reference(Element::EmptyLine)
+            .reference(Element::EndOfLine)
          .end()
          .reference(Element::Statement)
          .zero_or_more()
             .choice()
                .reference(Element::Statement)
-               .reference(Element::EmptyLine)
+               .reference(Element::EndOfLine)
             .end()
          .end()
       .end();
@@ -178,27 +183,9 @@ fn statement(b: &mut Builder) {
 #[cfg_attr(rustfmt, rustfmt_skip)]
 fn eol(b: &mut Builder) {
    b.element(Element::EndOfLine)
-      .sequence()
-         .skip_space()
-         .choice()
-            .tok(Tok::NewLine)
-            .eof()
-         .end()
-      .end();
-}
-
-#[cfg_attr(rustfmt, rustfmt_skip)]
-fn empty_line(b: &mut Builder) {
-   b.element(Element::EmptyLine)
       .choice()
-         .sequence()
-            .skip_space()
-            .tok(Tok::NewLine)
-         .end()
-         .sequence()
-            .tok(Tok::Space)
-            .eof()
-         .end()
+         .tok(Tok::NewLine)
+         .eof()
       .end();
 }
 
@@ -349,8 +336,18 @@ impl Builder {
       self
    }
 
+   #[cfg_attr(rustfmt, rustfmt_skip)]
    fn skip_space(&mut self) -> &mut Self {
-      self.zero_or_one().tok(Tok::Space).end()
+      self
+         .zero_or_one()
+            .choice()
+               .tok(Tok::Space)
+               .sequence()
+                  .tok(Tok::NewLine)
+                  .indentation(2)
+               .end()
+            .end()
+         .end()
    }
 
    fn indentation(&mut self, offset: usize) -> &mut Self {
@@ -504,38 +501,36 @@ fn parse_toks(
             elm_pos += 1;
          }
          Node::Indentation(offset) => {
-            matched = if tok_pos < toks.len() {
-               let equal = toks[tok_pos] == Tok::Space
-                  && toks_meta[tok_pos].span == (indentation + offset) * step;
-               if equal {
-                  dsp_elm!(
-                     elm_pos,
-                     path,
-                     "{}Indentation {} [{:03}]",
-                     C_HIGHLIGHT,
-                     toks_meta[tok_pos].span,
-                     tok_pos
-                  );
+            let spaces = (indentation + offset) * step;
+
+            matched = if tok_pos != toks.len() {
+               if spaces != 0 {
+                  let span = toks_meta[tok_pos].span;
+                  let equal = toks[tok_pos] == Tok::Space && span == spaces;
+                  if equal {
+                     dsp_elm!(
+                        elm_pos,
+                        path,
+                        "{}Indentation {} [{:03}]",
+                        C_HIGHLIGHT,
+                        span,
+                        tok_pos
+                     );
+
+                     tok_pos += 1;
+                  } else {
+                     dsp_elm!(elm_pos, path, "Indentation {} [{:03}]", span, tok_pos);
+                  }
+
+                  equal
                } else {
-                  dsp_elm!(
-                     elm_pos,
-                     path,
-                     "Indentation {} [{:03}]",
-                     toks_meta[tok_pos].span,
-                     tok_pos
-                  );
+                  true
                }
-               equal
             } else {
                false
             };
 
-            if matched {
-               tok_pos += 1;
-            }
-
             elm_pos += 1;
-            continue;
          }
          Node::Eof => {
             matched = tok_pos == toks.len();

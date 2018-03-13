@@ -58,15 +58,12 @@ impl<'s, T> Advancer<'s, T> {
    }
 
    #[cfg_attr(feature = "cargo-clippy", allow(needless_pass_by_value))]
-   pub fn zero_or_one<M: Matcher<T>>(&mut self, m: M) -> Option<&T> {
+   pub fn zero_or_one<M: Matcher<T>>(&mut self, m: M) {
       if let Some(item) = self.slice.get(self.peek) {
          if m.matches(item) {
             self.peek += 1;
-            return Some(item);
          }
       }
-
-      None
    }
 
    #[cfg_attr(feature = "cargo-clippy", allow(needless_pass_by_value))]
@@ -102,7 +99,9 @@ impl<'s, T> Advancer<'s, T> {
          span += 1;
       }
 
-      self.peek += span;
+      if span != 0 {
+         self.peek += span;
+      }
    }
 }
 

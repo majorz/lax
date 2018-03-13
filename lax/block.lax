@@ -1,2 +1,3 @@
-if not false or not true
+if true
+      or false
    1000

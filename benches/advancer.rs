@@ -66,10 +66,10 @@ fn advancer_benchmark(c: &mut Criterion) {
 
          while !advancer.completed() {
             for _ in 0..5 {
-               advancer.zero_or_one('a').unwrap();
+               advancer.zero_or_one('a');
             }
             for _ in 0..5 {
-               advancer.zero_or_one('b').unwrap();
+               advancer.zero_or_one('b');
             }
             advancer.consume();
          }
