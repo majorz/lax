@@ -44,6 +44,10 @@ impl<'s, T> Advancer<'s, T> {
       self.peek == self.slice.len()
    }
 
+   pub fn cannot_peek(&self) -> bool {
+      self.peek == self.slice.len()
+   }
+
    #[cfg_attr(feature = "cargo-clippy", allow(needless_pass_by_value))]
    pub fn one<M: Matcher<T>>(&mut self, m: M) -> Option<&T> {
       if let Some(item) = self.slice.get(self.peek) {

@@ -4,7 +4,7 @@ use advancer::Advancer;
 pub enum Tok {
    Indent,
    Space,
-   NewLine,
+   LineEnd,
    DoubleAsterisk,
    DoubleEquals,
    ExclamationEquals,
@@ -68,7 +68,7 @@ type CharAdvancer<'a> = Advancer<'a, char>;
 
 type FnMatcher = fn(&char) -> bool;
 
-fn space_new_line(advancer: &mut CharAdvancer) -> TokMatch {
+fn space_line_end(advancer: &mut CharAdvancer) -> TokMatch {
    let pos_start = advancer.pos();
    advancer.zero_or_more(' ');
 
@@ -78,14 +78,18 @@ fn space_new_line(advancer: &mut CharAdvancer) -> TokMatch {
    let pos_after_r = advancer.pos();
    if pos_after_r != pos_after_space {
       advancer.zero_or_one('\n');
-      Some((Tok::NewLine, advancer.consume()))
+      Some((Tok::LineEnd, advancer.consume()))
    } else {
       advancer.zero_or_one('\n');
 
       if pos_after_r != advancer.pos() {
-         Some((Tok::NewLine, advancer.consume()))
+         Some((Tok::LineEnd, advancer.consume()))
       } else if pos_after_space != pos_start {
-         Some((Tok::Space, advancer.consume()))
+         if advancer.cannot_peek() {
+            Some((Tok::LineEnd, advancer.consume()))
+         } else {
+            Some((Tok::Space, advancer.consume()))
+         }
       } else {
          None
       }
@@ -249,7 +253,7 @@ exact!('{', curly_bracket_left, Tok::CurlyBracketLeft);
 exact!('}', curly_backet_right, Tok::CurlyBracketRight);
 
 const MATCHERS: &[fn(advancer: &mut CharAdvancer) -> TokMatch] = &[
-   space_new_line,
+   space_line_end,
    double_asterisk,
    double_equals,
    exclamation_equals,
@@ -356,12 +360,23 @@ impl<'s> Tokenizer<'s> {
          }
       }
 
+      let line_end = if let Some(tok) = self.toks.last() {
+         tok == &Tok::LineEnd
+      } else {
+         false
+      };
+
+      if !line_end {
+         let end = self.end;
+         self.push(Tok::LineEnd, end);
+      }
+
       self
    }
 
    fn match_tok(&mut self) {
       if let Some((tok, end)) = choose_matcher(&mut self.advancer) {
-         self.after_new_line = tok == Tok::NewLine;
+         self.after_new_line = tok == Tok::LineEnd;
 
          self.push(tok, end);
 
@@ -508,26 +523,22 @@ mod tests {
    }
 
    #[test]
-   fn test_new_line() {
-      m!(space_new_line, "  \n", Tok::NewLine, 3);
-      m!(space_new_line, "\n  ", Tok::NewLine, 1);
-      m!(space_new_line, "\n\n", Tok::NewLine, 1);
-      m!(space_new_line, "\r\n", Tok::NewLine, 2);
-      m!(space_new_line, "\r\r", Tok::NewLine, 1);
-      m!(space_new_line, "\r\n", Tok::NewLine, 2);
-      m!(space_new_line, "  \n    ", Tok::NewLine, 3);
-      m!(space_new_line, "  \r\n\n", Tok::NewLine, 4);
-   }
-
-   #[test]
-   fn test_space() {
-      m!(space_new_line, "");
-      m!(space_new_line, "-");
-      m!(space_new_line, "- ");
-      m!(space_new_line, " ", Tok::Space, 1);
-      m!(space_new_line, " -", Tok::Space, 1);
-      m!(space_new_line, "   ", Tok::Space, 3);
-      m!(space_new_line, "   -", Tok::Space, 3);
+   fn test_space_line_end() {
+      m!(space_line_end, "");
+      m!(space_line_end, "  \n", Tok::LineEnd, 3);
+      m!(space_line_end, "\n  ", Tok::LineEnd, 1);
+      m!(space_line_end, "\n\n", Tok::LineEnd, 1);
+      m!(space_line_end, "\r\n", Tok::LineEnd, 2);
+      m!(space_line_end, "\r\r", Tok::LineEnd, 1);
+      m!(space_line_end, "\r\n", Tok::LineEnd, 2);
+      m!(space_line_end, "  \n    ", Tok::LineEnd, 3);
+      m!(space_line_end, "  \r\n\n", Tok::LineEnd, 4);
+      m!(space_line_end, "-");
+      m!(space_line_end, "- ");
+      m!(space_line_end, " ", Tok::LineEnd, 1);
+      m!(space_line_end, " -", Tok::Space, 1);
+      m!(space_line_end, "   ", Tok::LineEnd, 3);
+      m!(space_line_end, "   -", Tok::Space, 3);
    }
 
    #[test]

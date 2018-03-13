@@ -37,7 +37,6 @@ fn main() {
       if_,
       block,
       statement,
-      eol,
       expression,
       nary_right,
       nary_operator,
@@ -77,6 +76,16 @@ fn main() {
 
    let chars: Vec<_> = source.chars().collect();
 
+   println!(
+      "{}Length: {}{}{}",
+      C_TEXT,
+      C_HIGHLIGHT,
+      chars.len(),
+      C_RESET
+   );
+
+   println!("{}----------------{}", C_DOTS, C_RESET);
+
    let (toks, toks_meta) = tokenize(&chars);
 
    toks
@@ -111,7 +120,6 @@ enum Element {
    If,
    Block,
    Statement,
-   EndOfLine,
    Expression,
    NaryRight,
    NaryOperator,
@@ -131,7 +139,7 @@ fn module(b: &mut Builder) {
       .zero_or_more()
          .choice()
             .reference(Element::Statement)
-            .reference(Element::EndOfLine)
+            .tok(Tok::LineEnd)
          .end()
       .end();
 }
@@ -143,7 +151,7 @@ fn if_(b: &mut Builder) {
          .tok(Tok::If)
          .skip_space()
          .reference(Element::Expression)
-         .reference(Element::EndOfLine)
+         .tok(Tok::LineEnd)
          .reference(Element::Block)
       .end();
 }
@@ -153,13 +161,13 @@ fn block(b: &mut Builder) {
    b.element(Element::Block)
       .sequence()
          .zero_or_more()
-            .reference(Element::EndOfLine)
+            .tok(Tok::LineEnd)
          .end()
          .reference(Element::Statement)
          .zero_or_more()
             .choice()
                .reference(Element::Statement)
-               .reference(Element::EndOfLine)
+               .tok(Tok::LineEnd)
             .end()
          .end()
       .end();
@@ -174,18 +182,9 @@ fn statement(b: &mut Builder) {
             .reference(Element::If)
             .sequence()
                .reference(Element::Expression)
-               .reference(Element::EndOfLine)
+               .tok(Tok::LineEnd)
             .end()
          .end()
-      .end();
-}
-
-#[cfg_attr(rustfmt, rustfmt_skip)]
-fn eol(b: &mut Builder) {
-   b.element(Element::EndOfLine)
-      .choice()
-         .tok(Tok::NewLine)
-         .eof()
       .end();
 }
 
@@ -305,7 +304,6 @@ enum Node {
    ZeroOrOne(usize),
    ZeroOrMore(usize),
    Indentation(usize),
-   Eof,
 }
 
 struct Builder {
@@ -343,7 +341,7 @@ impl Builder {
             .choice()
                .tok(Tok::Space)
                .sequence()
-                  .tok(Tok::NewLine)
+                  .tok(Tok::LineEnd)
                   .indentation(2)
                .end()
             .end()
@@ -352,11 +350,6 @@ impl Builder {
 
    fn indentation(&mut self, offset: usize) -> &mut Self {
       self.nodes.push(Node::Indentation(offset));
-      self
-   }
-
-   fn eof(&mut self) -> &mut Self {
-      self.nodes.push(Node::Eof);
       self
    }
 
@@ -529,11 +522,6 @@ fn parse_toks(
             } else {
                false
             };
-
-            elm_pos += 1;
-         }
-         Node::Eof => {
-            matched = tok_pos == toks.len();
 
             elm_pos += 1;
          }

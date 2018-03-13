@@ -25,7 +25,7 @@ impl IndentationEstimator {
             self.prev_space_span = tok_meta.span;
          }
 
-         self.after_new_line = tok == &Tok::NewLine;
+         self.after_new_line = tok == &Tok::LineEnd;
       }
 
       self
