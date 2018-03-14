@@ -479,6 +479,8 @@ fn parse_toks(
                      tok_src,
                      tok_pos
                   );
+
+                  tok_pos += 1;
                } else {
                   dsp_elm!(elm_pos, path, "TOK {:?} [{:03}]", tok_src, tok_pos);
                }
@@ -487,38 +489,38 @@ fn parse_toks(
                false
             };
 
-            if matched {
-               tok_pos += 1;
-            }
-
             elm_pos += 1;
          }
          Node::Indentation(offset) => {
             let spaces = (indentation + offset) * step;
 
-            matched = if tok_pos != toks.len() {
-               if spaces != 0 {
-                  let span = toks_meta[tok_pos].span;
-                  let equal = toks[tok_pos] == Tok::Space && span == spaces;
-                  if equal {
-                     dsp_elm!(
-                        elm_pos,
-                        path,
-                        "{}Indentation {} [{:03}]",
-                        C_HIGHLIGHT,
-                        span,
-                        tok_pos
-                     );
+            matched = if spaces == 0 {
+               dsp_elm!(
+                  elm_pos,
+                  path,
+                  "{}Indentation 0",
+                  C_HIGHLIGHT
+               );
+               true
+            } else if let Some(tok_src) = toks.get(tok_pos) {
+               let span = toks_meta[tok_pos].span;
+               let equal = tok_src == &Tok::Space && span == spaces;
+               if equal {
+                  dsp_elm!(
+                     elm_pos,
+                     path,
+                     "{}Indentation {} [{:03}]",
+                     C_HIGHLIGHT,
+                     span,
+                     tok_pos
+                  );
 
-                     tok_pos += 1;
-                  } else {
-                     dsp_elm!(elm_pos, path, "Indentation {} [{:03}]", span, tok_pos);
-                  }
-
-                  equal
+                  tok_pos += 1;
                } else {
-                  true
+                  dsp_elm!(elm_pos, path, "Indentation {} [{:03}]", span, tok_pos);
                }
+
+               equal
             } else {
                false
             };
