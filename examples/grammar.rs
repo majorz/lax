@@ -18,13 +18,13 @@ const C_PUNCT: color::Fg<color::Rgb> = color::Fg(color::Rgb(216, 46, 0));
 const C_TEXT: color::Fg<color::Rgb> = color::Fg(color::Rgb(121, 166, 169));
 
 macro_rules! dsp_elm {
-   ($elm_pos:expr, $path:tt, $fmt:expr, $($arg:tt)*) => {
+   ($elm_pos:expr, $path:expr, $fmt:expr, $($arg:tt)*) => {
       printi!(concat!("{}.{} {}", $fmt, "{}"), $elm_pos, C_DOTS, "..".repeat($path.len()), C_TEXT, $($arg)*, C_RESET);
    };
 }
 
 macro_rules! printi {
-   ($fmt:expr, $pos:tt, $($arg:tt)*) => {
+   ($fmt:expr, $pos:expr, $($arg:tt)*) => {
       println!(concat!("{}[{}{:03}{}]{} ", $fmt), C_DOTS, C_INDEX, $pos, C_DOTS, C_RESET, $($arg)*);
    };
 }
@@ -111,7 +111,7 @@ fn main() {
 
    println!("{}================{}", C_DOTS, C_RESET);
 
-   parse_toks(&nodes, &elements, &toks, &toks_meta, step);
+   TokParser::new(&nodes, &elements, &toks, &toks_meta, step).parse();
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -410,253 +410,293 @@ impl Builder {
    }
 }
 
-#[cfg_attr(feature = "cargo-clippy", allow(cyclomatic_complexity))]
-fn parse_toks(
-   nodes: &[Node],
-   elements: &[usize; ELEMENTS_COUNT],
-   toks: &[Tok],
-   toks_meta: &[TokMeta],
+struct TokParser<'b, 't> {
+   nodes: &'b [Node],
+   elements: &'b [usize; ELEMENTS_COUNT],
+   toks: &'t [Tok],
+   toks_meta: &'t [TokMeta],
    step: usize,
-) {
-   let mut path: Vec<usize> = Vec::new();
+   path: Vec<usize>,
+   elm_pos: usize,
+   tok_pos: usize,
+   tok_pos_stack: Vec<usize>,
+   indentation: usize,
+   matched: bool,
+}
 
-   let mut elm_pos = elements[Element::Module as usize];
+impl<'b, 't> TokParser<'b, 't> {
+   fn new(
+      nodes: &'b [Node],
+      elements: &'b [usize; ELEMENTS_COUNT],
+      toks: &'t [Tok],
+      toks_meta: &'t [TokMeta],
+      step: usize,
+   ) -> Self {
+      let path: Vec<usize> = Vec::new();
+      let elm_pos = elements[Element::Module as usize];
 
-   let mut tok_pos = 0;
-   let mut tok_pos_stack: Vec<usize> = Vec::new();
+      let tok_pos = 0;
+      let tok_pos_stack: Vec<usize> = Vec::new();
 
-   let mut indentation = 0;
+      let indentation = 0;
 
-   loop {
-      dsp_elm!(elm_pos, path, "{:?}", nodes[elm_pos]);
+      let matched = false;
 
-      let mut matched;
+      TokParser {
+         nodes,
+         elements,
+         toks,
+         toks_meta,
+         step,
+         path,
+         elm_pos,
+         tok_pos,
+         tok_pos_stack,
+         indentation,
+         matched,
+      }
+   }
 
-      match nodes[elm_pos] {
-         Node::Element(ref element) => {
-            dsp_elm!(
-               elm_pos,
-               path,
-               "{}{:?} [{:03}] >>",
-               C_PUNCT,
-               element,
-               tok_pos
-            );
-            if element == &Element::Block {
-               indentation += 1;
-            }
-            path.push(elm_pos);
-            tok_pos_stack.push(tok_pos);
-            elm_pos += 1;
-            continue;
-         }
-         Node::Sequence(end) | Node::ZeroOrOne(end) | Node::ZeroOrMore(end) | Node::Choice(end) => {
-            debug_assert!(elm_pos < end);
-            path.push(elm_pos);
-            tok_pos_stack.push(tok_pos);
-            elm_pos += 1;
-            continue;
-         }
-         Node::Reference(ref element) => {
-            if tok_pos == toks.len() {
-               matched = false;
-               elm_pos += 1;
-            } else {
-               path.push(elm_pos);
-               elm_pos = elements[*element as usize];
+   fn parse(&mut self) {
+      loop {
+         dsp_elm!(self.elm_pos, self.path, "{:?}", self.nodes[self.elm_pos]);
+
+         match self.nodes[self.elm_pos] {
+            Node::Element(ref element) => {
+               dsp_elm!(
+                  self.elm_pos,
+                  self.path,
+                  "{}{:?} [{:03}] >>",
+                  C_PUNCT,
+                  element,
+                  self.tok_pos
+               );
+               if element == &Element::Block {
+                  self.indentation += 1;
+               }
+               self.path.push(self.elm_pos);
+               self.tok_pos_stack.push(self.tok_pos);
+               self.elm_pos += 1;
                continue;
             }
-         }
-         Node::Tok(ref tok) => {
-            matched = if let Some(tok_src) = toks.get(tok_pos) {
-               let equal = tok == tok_src;
-               if equal {
-                  dsp_elm!(
-                     elm_pos,
-                     path,
-                     "{}TOK {:?} [{:03}]",
-                     C_HIGHLIGHT,
-                     tok_src,
-                     tok_pos
-                  );
-
-                  tok_pos += 1;
-               } else {
-                  dsp_elm!(elm_pos, path, "TOK {:?} [{:03}]", tok_src, tok_pos);
-               }
-               equal
-            } else {
-               false
-            };
-
-            elm_pos += 1;
-         }
-         Node::Indentation(offset) => {
-            let spaces = (indentation + offset) * step;
-
-            matched = if spaces == 0 {
-               dsp_elm!(
-                  elm_pos,
-                  path,
-                  "{}Indentation 0",
-                  C_HIGHLIGHT
-               );
-               true
-            } else if let Some(tok_src) = toks.get(tok_pos) {
-               let span = toks_meta[tok_pos].span;
-               let equal = tok_src == &Tok::Space && span == spaces;
-               if equal {
-                  dsp_elm!(
-                     elm_pos,
-                     path,
-                     "{}Indentation {} [{:03}]",
-                     C_HIGHLIGHT,
-                     span,
-                     tok_pos
-                  );
-
-                  tok_pos += 1;
-               } else {
-                  dsp_elm!(elm_pos, path, "Indentation {} [{:03}]", span, tok_pos);
-               }
-
-               equal
-            } else {
-               false
-            };
-
-            elm_pos += 1;
-         }
-      }
-
-      loop {
-         if !path.is_empty() {
-            let pos = *path.last().unwrap();
-
-            dsp_elm!(
-               pos,
-               path,
-               "?? {:?} [{:03}] {}",
-               nodes[pos],
-               elm_pos,
-               matched
-            );
-
-            match nodes[pos] {
-               Node::Element(ref element) => {
-                  if element == &Element::Block {
-                     indentation -= 1;
-                  }
-                  path.pop();
-                  let element_tok_pos = pop_tok_pos(&mut tok_pos_stack);
-                  if matched {
-                     dsp_elm!(
-                        pos,
-                        path,
-                        "{}{:?} {}[{:03}-{:03}] <<",
-                        C_HIGHLIGHT,
-                        element,
-                        C_PUNCT,
-                        element_tok_pos,
-                        tok_pos
-                     );
-                  } else {
-                     debug_assert!(element_tok_pos == tok_pos);
-                     dsp_elm!(
-                        pos,
-                        path,
-                        "{}{:?} [{:03}-{:03}] <<",
-                        C_PUNCT,
-                        element,
-                        element_tok_pos,
-                        tok_pos
-                     );
-                  }
-               }
-               Node::Sequence(end) => {
-                  if !matched {
-                     dsp_elm!(pos, path, "{} -> {}", elm_pos, end);
-                     elm_pos = end;
-                     path.pop();
-                     tok_pos = pop_tok_pos(&mut tok_pos_stack);
-                  } else if elm_pos == end {
-                     path.pop();
-                     tok_pos_stack.pop();
-                  } else {
-                     break;
-                  }
-               }
-               Node::Choice(end) => {
-                  if matched {
-                     dsp_elm!(pos, path, "{} |> {}", elm_pos, end);
-                     elm_pos = end;
-                     path.pop();
-                     tok_pos_stack.pop();
-                  } else if elm_pos == end {
-                     path.pop();
-                     tok_pos = pop_tok_pos(&mut tok_pos_stack);
-                  } else {
-                     tok_pos = last_tok_pos(&tok_pos_stack);
-                     break;
-                  }
-               }
-               Node::ZeroOrOne(end) => {
-                  if !matched {
-                     dsp_elm!(elm_pos, path, "{} 0> {}", elm_pos, end);
-                     elm_pos = end;
-                     path.pop();
-                     tok_pos = pop_tok_pos(&mut tok_pos_stack);
-                     matched = true;
-                  } else if elm_pos == end {
-                     path.pop();
-                     tok_pos_stack.pop();
-                  } else {
-                     break;
-                  }
-               }
-               Node::ZeroOrMore(end) => {
-                  if !matched {
-                     dsp_elm!(elm_pos, path, "{} *> {}", elm_pos, end);
-                     elm_pos = end;
-                     path.pop();
-                     tok_pos = pop_tok_pos(&mut tok_pos_stack);
-                     matched = true;
-                  } else if elm_pos == end {
-                     dsp_elm!(elm_pos, path, "{} <* {}", elm_pos, pos);
-                     elm_pos = pos + 1;
-                     *tok_pos_stack.last_mut().unwrap() = tok_pos;
-                     break;
-                  } else {
-                     break;
-                  }
-               }
-               Node::Reference(ref _element) => {
-                  dsp_elm!(elm_pos, path, "{} &> {}", elm_pos, pos + 1);
-                  elm_pos = pos + 1;
-                  path.pop();
-               }
-               _ => unreachable!(),
+            Node::Sequence(end)
+            | Node::ZeroOrOne(end)
+            | Node::ZeroOrMore(end)
+            | Node::Choice(end) => {
+               debug_assert!(self.elm_pos < end);
+               self.path.push(self.elm_pos);
+               self.tok_pos_stack.push(self.tok_pos);
+               self.elm_pos += 1;
+               continue;
             }
-         } else {
-            dsp_elm!(elm_pos, path, "{}", "FI");
-            return;
+            Node::Reference(ref element) => {
+               if self.tok_pos == self.toks.len() {
+                  self.matched = false;
+                  self.elm_pos += 1;
+               } else {
+                  self.path.push(self.elm_pos);
+                  self.elm_pos = self.elements[*element as usize];
+                  continue;
+               }
+            }
+            Node::Tok(ref tok) => {
+               self.matched = if let Some(tok_src) = self.toks.get(self.tok_pos) {
+                  let equal = tok == tok_src;
+                  if equal {
+                     dsp_elm!(
+                        self.elm_pos,
+                        self.path,
+                        "{}TOK {:?} [{:03}]",
+                        C_HIGHLIGHT,
+                        tok_src,
+                        self.tok_pos
+                     );
+
+                     self.tok_pos += 1;
+                  } else {
+                     dsp_elm!(
+                        self.elm_pos,
+                        self.path,
+                        "TOK {:?} [{:03}]",
+                        tok_src,
+                        self.tok_pos
+                     );
+                  }
+                  equal
+               } else {
+                  false
+               };
+
+               self.elm_pos += 1;
+            }
+            Node::Indentation(offset) => {
+               let spaces = (self.indentation + offset) * self.step;
+
+               self.matched = if spaces == 0 {
+                  dsp_elm!(self.elm_pos, self.path, "{}Indentation 0", C_HIGHLIGHT);
+                  true
+               } else if let Some(tok_src) = self.toks.get(self.tok_pos) {
+                  let span = self.toks_meta[self.tok_pos].span;
+                  let equal = tok_src == &Tok::Space && span == spaces;
+                  if equal {
+                     dsp_elm!(
+                        self.elm_pos,
+                        self.path,
+                        "{}Indentation {} [{:03}]",
+                        C_HIGHLIGHT,
+                        span,
+                        self.tok_pos
+                     );
+
+                     self.tok_pos += 1;
+                  } else {
+                     dsp_elm!(
+                        self.elm_pos,
+                        self.path,
+                        "Indentation {} [{:03}]",
+                        span,
+                        self.tok_pos
+                     );
+                  }
+
+                  equal
+               } else {
+                  false
+               };
+
+               self.elm_pos += 1;
+            }
+         }
+
+         loop {
+            if !self.path.is_empty() {
+               let pos = *self.path.last().unwrap();
+
+               dsp_elm!(
+                  pos,
+                  self.path,
+                  "?? {:?} [{:03}] {}",
+                  self.nodes[pos],
+                  self.elm_pos,
+                  self.matched
+               );
+
+               match self.nodes[pos] {
+                  Node::Element(ref element) => {
+                     if element == &Element::Block {
+                        self.indentation -= 1;
+                     }
+                     self.path.pop();
+                     let element_tok_pos = self.pop_tok_pos();
+                     if self.matched {
+                        dsp_elm!(
+                           pos,
+                           self.path,
+                           "{}{:?} {}[{:03}-{:03}] <<",
+                           C_HIGHLIGHT,
+                           element,
+                           C_PUNCT,
+                           element_tok_pos,
+                           self.tok_pos
+                        );
+                     } else {
+                        debug_assert!(element_tok_pos == self.tok_pos);
+                        dsp_elm!(
+                           pos,
+                           self.path,
+                           "{}{:?} [{:03}-{:03}] <<",
+                           C_PUNCT,
+                           element,
+                           element_tok_pos,
+                           self.tok_pos
+                        );
+                     }
+                  }
+                  Node::Sequence(end) => {
+                     if !self.matched {
+                        dsp_elm!(pos, self.path, "{} -> {}", self.elm_pos, end);
+                        self.elm_pos = end;
+                        self.path.pop();
+                        self.tok_pos = self.pop_tok_pos();
+                     } else if self.elm_pos == end {
+                        self.path.pop();
+                        self.tok_pos_stack.pop();
+                     } else {
+                        break;
+                     }
+                  }
+                  Node::Choice(end) => {
+                     if self.matched {
+                        dsp_elm!(pos, self.path, "{} |> {}", self.elm_pos, end);
+                        self.elm_pos = end;
+                        self.path.pop();
+                        self.tok_pos_stack.pop();
+                     } else if self.elm_pos == end {
+                        self.path.pop();
+                        self.tok_pos = self.pop_tok_pos();
+                     } else {
+                        self.tok_pos = self.last_tok_pos();
+                        break;
+                     }
+                  }
+                  Node::ZeroOrOne(end) => {
+                     if !self.matched {
+                        dsp_elm!(self.elm_pos, self.path, "{} 0> {}", self.elm_pos, end);
+                        self.elm_pos = end;
+                        self.path.pop();
+                        self.tok_pos = self.pop_tok_pos();
+                        self.matched = true;
+                     } else if self.elm_pos == end {
+                        self.path.pop();
+                        self.tok_pos_stack.pop();
+                     } else {
+                        break;
+                     }
+                  }
+                  Node::ZeroOrMore(end) => {
+                     if !self.matched {
+                        dsp_elm!(self.elm_pos, self.path, "{} *> {}", self.elm_pos, end);
+                        self.elm_pos = end;
+                        self.path.pop();
+                        self.tok_pos = self.pop_tok_pos();
+                        self.matched = true;
+                     } else if self.elm_pos == end {
+                        dsp_elm!(self.elm_pos, self.path, "{} <* {}", self.elm_pos, pos);
+                        self.elm_pos = pos + 1;
+                        *self.tok_pos_stack.last_mut().unwrap() = self.tok_pos;
+                        break;
+                     } else {
+                        break;
+                     }
+                  }
+                  Node::Reference(ref _element) => {
+                     dsp_elm!(self.elm_pos, self.path, "{} &> {}", self.elm_pos, pos + 1);
+                     self.elm_pos = pos + 1;
+                     self.path.pop();
+                  }
+                  _ => unreachable!(),
+               }
+            } else {
+               dsp_elm!(self.elm_pos, self.path, "{}", "FI");
+               return;
+            }
          }
       }
    }
-}
 
-fn last_tok_pos(tok_pos_stack: &[usize]) -> usize {
-   if let Some(tok_pos) = tok_pos_stack.last() {
-      *tok_pos
-   } else {
-      unreachable!();
+   fn last_tok_pos(&self) -> usize {
+      if let Some(tok_pos) = self.tok_pos_stack.last() {
+         *tok_pos
+      } else {
+         unreachable!();
+      }
    }
-}
 
-fn pop_tok_pos(tok_pos_stack: &mut Vec<usize>) -> usize {
-   if let Some(tok_pos) = tok_pos_stack.pop() {
-      tok_pos
-   } else {
-      unreachable!();
+   fn pop_tok_pos(&mut self) -> usize {
+      if let Some(tok_pos) = self.tok_pos_stack.pop() {
+         tok_pos
+      } else {
+         unreachable!();
+      }
    }
 }
