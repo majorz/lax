@@ -3,14 +3,12 @@ use std::collections::BTreeMap;
 use tokenize::{Tok, TokMeta};
 
 struct IndentationEstimator {
-   total: isize,
-   deltas: BTreeMap<usize, isize>,
+   deltas: BTreeMap<isize, isize>,
 }
 
 impl IndentationEstimator {
    fn new() -> Self {
       IndentationEstimator {
-         total: 0,
          deltas: BTreeMap::new(),
       }
    }
@@ -21,7 +19,7 @@ impl IndentationEstimator {
 
       for (tok, tok_meta) in toks.iter().zip(toks_meta.iter()) {
          if after_new_line && tok == &Tok::Space {
-            let delta = (tok_meta.span as isize - prev_space_span as isize).abs() as usize;
+            let delta = tok_meta.span as isize - prev_space_span as isize;
 
             if delta != 0 {
                self
@@ -29,8 +27,6 @@ impl IndentationEstimator {
                   .entry(delta)
                   .and_modify(|e| *e += 1)
                   .or_insert(1);
-
-               self.total += 1;
 
                prev_space_span = tok_meta.span;
             }
@@ -49,8 +45,17 @@ impl IndentationEstimator {
       for target in self.deltas.keys().rev() {
          let mut matches: isize = 0;
 
+         let target = target.abs();
+
          for (delta, count) in &self.deltas {
-            if delta % target == 0 {
+            let matched = if *delta > 0 {
+               *delta == target || *delta == 2 * target
+            } else {
+               let delta = delta.abs();
+               delta % target == 0
+            };
+
+            if matched {
                matches += count;
             } else {
                matches -= count;
@@ -58,12 +63,12 @@ impl IndentationEstimator {
          }
 
          if matches > matches_max {
-            target_max = *target;
+            target_max = target;
             matches_max = matches;
          }
       }
 
-      target_max
+      target_max as usize
    }
 }
 
@@ -181,6 +186,35 @@ mod tests {
                     x
          ",
          3
+      );
+   }
+
+   #[test]
+   fn test_one_off() {
+      assert_indentation!(
+         "
+         x
+            x
+               x
+                  x
+                   x
+         ",
+         3
+      );
+   }
+
+   #[test]
+   fn test_triple() {
+      assert_indentation!(
+         "
+         x
+            x
+                     x
+               x
+                 x
+               x
+         ",
+         2
       );
    }
 }
