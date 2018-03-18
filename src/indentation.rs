@@ -1,64 +1,186 @@
+use std::collections::BTreeMap;
+
 use tokenize::{Tok, TokMeta};
 
 struct IndentationEstimator {
-   after_new_line: bool,
-   prev_space_span: usize,
-   indents: [isize; 4],
+   total: isize,
+   deltas: BTreeMap<usize, isize>,
 }
 
 impl IndentationEstimator {
    fn new() -> Self {
       IndentationEstimator {
-         after_new_line: true,
-         prev_space_span: 0,
-         indents: [0, 0, 0, 0],
+         total: 0,
+         deltas: BTreeMap::new(),
       }
    }
 
-   fn count(&mut self, toks: &[Tok], toks_meta: &[TokMeta]) -> &mut Self {
+   fn count(mut self, toks: &[Tok], toks_meta: &[TokMeta]) -> Self {
+      let mut prev_space_span = 0;
+      let mut after_new_line = true;
+
       for (tok, tok_meta) in toks.iter().zip(toks_meta.iter()) {
-         if self.after_new_line && tok == &Tok::Space {
-            let delta = tok_meta.span as isize - self.prev_space_span as isize;
+         if after_new_line && tok == &Tok::Space {
+            let delta = (tok_meta.span as isize - prev_space_span as isize).abs() as usize;
 
-            self.update(delta);
+            if delta != 0 {
+               self
+                  .deltas
+                  .entry(delta)
+                  .and_modify(|e| *e += 1)
+                  .or_insert(1);
 
-            self.prev_space_span = tok_meta.span;
+               self.total += 1;
+
+               prev_space_span = tok_meta.span;
+            }
          }
 
-         self.after_new_line = tok == &Tok::LineEnd;
+         after_new_line = tok == &Tok::LineEnd;
       }
 
       self
    }
 
-   fn update(&mut self, delta: isize) {
-      if delta == 0 {
-         return;
-      }
+   fn estimate(&self) -> usize {
+      let mut target_max = 0;
+      let mut matches_max = ::std::isize::MIN;
 
-      for (i, count) in self.indents.iter_mut().enumerate() {
-         let ident = i as isize + 1;
-         if delta % ident != 0 || delta > ident * 2 {
-            *count -= 1;
-         } else {
-            *count += 1;
+      for target in self.deltas.keys().rev() {
+         let mut matches: isize = 0;
+
+         for (delta, count) in &self.deltas {
+            if delta % target == 0 {
+               matches += count;
+            } else {
+               matches -= count;
+            }
+         }
+
+         if matches > matches_max {
+            target_max = *target;
+            matches_max = matches;
          }
       }
-   }
 
-   fn estimate(&self) -> Option<usize> {
-      for (i, count) in self.indents.iter().rev().enumerate() {
-         if *count > 0 {
-            return Some(4 - i);
-         }
-      }
-
-      None
+      target_max
    }
 }
 
-pub fn estimate_indentation(toks: &[Tok], toks_meta: &[TokMeta]) -> Option<usize> {
+pub fn estimate_indentation(toks: &[Tok], toks_meta: &[TokMeta]) -> usize {
    IndentationEstimator::new()
       .count(toks, toks_meta)
       .estimate()
+}
+
+#[cfg(test)]
+mod tests {
+   use super::*;
+
+   use tokenize::tokenize;
+
+   macro_rules! assert_indentation {
+      ($string:tt, $expected:tt) => {
+         let source = indoc!($string);
+         let chars: Vec<_> = source.chars().collect();
+         let (toks, toks_meta) = tokenize(&chars);
+         let estimated = IndentationEstimator::new().count(&toks, &toks_meta).estimate();
+         assert_eq!(estimated, $expected);
+      }
+   }
+
+   #[test]
+   fn test_continuation() {
+      assert_indentation!(
+         "
+         x
+               x
+            x
+                  x
+               x
+                     x
+         ",
+         3
+      );
+   }
+
+   #[test]
+   fn test_no_indentation() {
+      assert_indentation!(
+         "
+         x
+         x
+         x
+         x
+         ",
+         0
+      );
+   }
+
+   #[test]
+   fn test_no_inner_spaces() {
+      assert_indentation!(
+         "
+         x x x x x x
+            x x x x x x
+               x x x x x x
+         ",
+         3
+      );
+   }
+
+   #[test]
+   fn test_mixed_bigger() {
+      assert_indentation!(
+         "
+         x
+            x
+              x
+         ",
+         3
+      );
+   }
+
+   #[test]
+   fn test_mixed_more() {
+      assert_indentation!(
+         "
+         x
+            x
+              x
+            x
+         ",
+         2
+      );
+   }
+
+   #[test]
+   fn test_mixed_block() {
+      assert_indentation!(
+         "
+         x
+           x
+           x
+           x
+           x
+              x
+         ",
+         3
+      );
+   }
+
+   #[test]
+   fn test_primes() {
+      assert_indentation!(
+         "
+         x
+           x
+              x
+                   x
+                          x
+                    x
+         ",
+         3
+      );
+   }
 }

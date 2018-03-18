@@ -18,10 +18,10 @@ fn main() {
 
    let (toks, toks_meta) = tokenize(&chars);
 
-   match estimate_indentation(&toks, &toks_meta) {
-      Some(indentation) => println!("Indentation is {} spaces", indentation),
-      None => println!("No indentation used"),
-   }
+   println!(
+      "Indentation is {} spaces",
+      estimate_indentation(&toks, &toks_meta)
+   );
 
    /*
    for (i, token) in tokens.iter().enumerate() {

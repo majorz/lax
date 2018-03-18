@@ -102,16 +102,16 @@ fn main() {
 
    println!("{}----------------{}", C_DOTS, C_RESET);
 
-   let step = match estimate_indentation(&toks, &toks_meta) {
-      Some(step) => step,
-      None => 1,
-   };
+   let module_indentation = estimate_indentation(&toks, &toks_meta);
 
-   println!("{}Indentation: {}{}{}", C_TEXT, C_HIGHLIGHT, step, C_RESET);
+   println!(
+      "{}Indentation: {}{}{}",
+      C_TEXT, C_HIGHLIGHT, module_indentation, C_RESET
+   );
 
    println!("{}================{}", C_DOTS, C_RESET);
 
-   TokParser::new(&nodes, &elements, &toks, &toks_meta, step).parse();
+   TokParser::new(&nodes, &elements, &toks, &toks_meta, module_indentation).parse();
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -348,8 +348,8 @@ impl Builder {
          .end()
    }
 
-   fn indentation(&mut self, offset: usize) -> &mut Self {
-      self.nodes.push(Node::Indentation(offset));
+   fn indentation(&mut self, indentation: usize) -> &mut Self {
+      self.nodes.push(Node::Indentation(indentation));
       self
    }
 
@@ -415,12 +415,12 @@ struct TokParser<'b, 't> {
    elements: &'b [usize; ELEMENTS_COUNT],
    toks: &'t [Tok],
    toks_meta: &'t [TokMeta],
-   step: usize,
+   module_indentation: usize,
+   current_indentation: usize,
    path: Vec<usize>,
    elm_pos: usize,
    tok_pos: usize,
    tok_pos_stack: Vec<usize>,
-   indentation: usize,
    matched: bool,
 }
 
@@ -430,7 +430,7 @@ impl<'b, 't> TokParser<'b, 't> {
       elements: &'b [usize; ELEMENTS_COUNT],
       toks: &'t [Tok],
       toks_meta: &'t [TokMeta],
-      step: usize,
+      module_indentation: usize,
    ) -> Self {
       let path: Vec<usize> = Vec::new();
       let elm_pos = elements[Element::Module as usize];
@@ -438,7 +438,7 @@ impl<'b, 't> TokParser<'b, 't> {
       let tok_pos = 0;
       let tok_pos_stack: Vec<usize> = Vec::new();
 
-      let indentation = 0;
+      let current_indentation = 0;
 
       let matched = false;
 
@@ -447,12 +447,12 @@ impl<'b, 't> TokParser<'b, 't> {
          elements,
          toks,
          toks_meta,
-         step,
+         module_indentation,
+         current_indentation,
          path,
          elm_pos,
          tok_pos,
          tok_pos_stack,
-         indentation,
          matched,
       }
    }
@@ -472,7 +472,7 @@ impl<'b, 't> TokParser<'b, 't> {
                   self.tok_pos
                );
                if element == &Element::Block {
-                  self.indentation += 1;
+                  self.current_indentation += 1;
                }
                self.path.push(self.elm_pos);
                self.tok_pos_stack.push(self.tok_pos);
@@ -529,8 +529,8 @@ impl<'b, 't> TokParser<'b, 't> {
 
                self.elm_pos += 1;
             }
-            Node::Indentation(offset) => {
-               let spaces = (self.indentation + offset) * self.step;
+            Node::Indentation(indentation) => {
+               let spaces = (self.current_indentation + indentation) * self.module_indentation;
 
                self.matched = if spaces == 0 {
                   dsp_elm!(self.elm_pos, self.path, "{}Indentation 0", C_HIGHLIGHT);
@@ -584,7 +584,7 @@ impl<'b, 't> TokParser<'b, 't> {
                match self.nodes[pos] {
                   Node::Element(ref element) => {
                      if element == &Element::Block {
-                        self.indentation -= 1;
+                        self.current_indentation -= 1;
                      }
                      self.path.pop();
                      let element_tok_pos = self.pop_tok_pos();
