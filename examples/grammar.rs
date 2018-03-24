@@ -459,227 +459,241 @@ impl<'b, 't> TokParser<'b, 't> {
 
    fn parse(&mut self) {
       loop {
-         dsp_elm!(self.elm_pos, self.path, "{:?}", self.nodes[self.elm_pos]);
+         if self.process_next() && self.try_finalize() {
+            break;
+         }
+      }
+   }
 
-         match self.nodes[self.elm_pos] {
-            Node::Element(ref element) => {
-               dsp_elm!(
-                  self.elm_pos,
-                  self.path,
-                  "{}{:?} [{:03}] >>",
-                  C_PUNCT,
-                  element,
-                  self.tok_pos
-               );
-               if element == &Element::Block {
-                  self.current_indentation += 1;
-               }
+   fn process_next(&mut self) -> bool {
+      dsp_elm!(self.elm_pos, self.path, "{:?}", self.nodes[self.elm_pos]);
+
+      match self.nodes[self.elm_pos] {
+         Node::Element(ref element) => {
+            dsp_elm!(
+               self.elm_pos,
+               self.path,
+               "{}{:?} [{:03}] >>",
+               C_PUNCT,
+               element,
+               self.tok_pos
+            );
+            if element == &Element::Block {
+               self.current_indentation += 1;
+            }
+            self.path.push(self.elm_pos);
+            self.tok_pos_stack.push(self.tok_pos);
+            self.elm_pos += 1;
+
+            false
+         }
+         Node::Sequence(end) | Node::ZeroOrOne(end) | Node::ZeroOrMore(end) | Node::Choice(end) => {
+            debug_assert!(self.elm_pos < end);
+            self.path.push(self.elm_pos);
+            self.tok_pos_stack.push(self.tok_pos);
+            self.elm_pos += 1;
+
+            false
+         }
+         Node::Reference(ref element) => {
+            if self.tok_pos == self.toks.len() {
+               self.matched = false;
+               self.elm_pos += 1;
+
+               true
+            } else {
                self.path.push(self.elm_pos);
-               self.tok_pos_stack.push(self.tok_pos);
-               self.elm_pos += 1;
-               continue;
-            }
-            Node::Sequence(end)
-            | Node::ZeroOrOne(end)
-            | Node::ZeroOrMore(end)
-            | Node::Choice(end) => {
-               debug_assert!(self.elm_pos < end);
-               self.path.push(self.elm_pos);
-               self.tok_pos_stack.push(self.tok_pos);
-               self.elm_pos += 1;
-               continue;
-            }
-            Node::Reference(ref element) => {
-               if self.tok_pos == self.toks.len() {
-                  self.matched = false;
-                  self.elm_pos += 1;
-               } else {
-                  self.path.push(self.elm_pos);
-                  self.elm_pos = self.elements[*element as usize];
-                  continue;
-               }
-            }
-            Node::Tok(ref tok) => {
-               self.matched = if let Some(tok_src) = self.toks.get(self.tok_pos) {
-                  let equal = tok == tok_src;
-                  if equal {
-                     dsp_elm!(
-                        self.elm_pos,
-                        self.path,
-                        "{}TOK {:?} [{:03}]",
-                        C_HIGHLIGHT,
-                        tok_src,
-                        self.tok_pos
-                     );
+               self.elm_pos = self.elements[*element as usize];
 
-                     self.tok_pos += 1;
-                  } else {
-                     dsp_elm!(
-                        self.elm_pos,
-                        self.path,
-                        "TOK {:?} [{:03}]",
-                        tok_src,
-                        self.tok_pos
-                     );
-                  }
-                  equal
-               } else {
-                  false
-               };
-
-               self.elm_pos += 1;
-            }
-            Node::Indentation(indentation) => {
-               let spaces = (self.current_indentation + indentation) * self.module_indentation;
-
-               self.matched = if spaces == 0 {
-                  dsp_elm!(self.elm_pos, self.path, "{}Indentation 0", C_HIGHLIGHT);
-                  true
-               } else if let Some(tok_src) = self.toks.get(self.tok_pos) {
-                  let span = self.toks_meta[self.tok_pos].span;
-                  let equal = tok_src == &Tok::Space && span == spaces;
-                  if equal {
-                     dsp_elm!(
-                        self.elm_pos,
-                        self.path,
-                        "{}Indentation {} [{:03}]",
-                        C_HIGHLIGHT,
-                        span,
-                        self.tok_pos
-                     );
-
-                     self.tok_pos += 1;
-                  } else {
-                     dsp_elm!(
-                        self.elm_pos,
-                        self.path,
-                        "Indentation {} [{:03}]",
-                        span,
-                        self.tok_pos
-                     );
-                  }
-
-                  equal
-               } else {
-                  false
-               };
-
-               self.elm_pos += 1;
+               false
             }
          }
+         Node::Tok(ref tok) => {
+            self.matched = if let Some(tok_src) = self.toks.get(self.tok_pos) {
+               let equal = tok == tok_src;
+               if equal {
+                  dsp_elm!(
+                     self.elm_pos,
+                     self.path,
+                     "{}TOK {:?} [{:03}]",
+                     C_HIGHLIGHT,
+                     tok_src,
+                     self.tok_pos
+                  );
 
-         loop {
-            if !self.path.is_empty() {
-               let pos = *self.path.last().unwrap();
-
-               dsp_elm!(
-                  pos,
-                  self.path,
-                  "?? {:?} [{:03}] {}",
-                  self.nodes[pos],
-                  self.elm_pos,
-                  self.matched
-               );
-
-               match self.nodes[pos] {
-                  Node::Element(ref element) => {
-                     if element == &Element::Block {
-                        self.current_indentation -= 1;
-                     }
-                     self.path.pop();
-                     let element_tok_pos = self.pop_tok_pos();
-                     if self.matched {
-                        dsp_elm!(
-                           pos,
-                           self.path,
-                           "{}{:?} {}[{:03}-{:03}] <<",
-                           C_HIGHLIGHT,
-                           element,
-                           C_PUNCT,
-                           element_tok_pos,
-                           self.tok_pos
-                        );
-                     } else {
-                        debug_assert!(element_tok_pos == self.tok_pos);
-                        dsp_elm!(
-                           pos,
-                           self.path,
-                           "{}{:?} [{:03}-{:03}] <<",
-                           C_PUNCT,
-                           element,
-                           element_tok_pos,
-                           self.tok_pos
-                        );
-                     }
-                  }
-                  Node::Sequence(end) => {
-                     if !self.matched {
-                        dsp_elm!(pos, self.path, "{} -> {}", self.elm_pos, end);
-                        self.elm_pos = end;
-                        self.path.pop();
-                        self.tok_pos = self.pop_tok_pos();
-                     } else if self.elm_pos == end {
-                        self.path.pop();
-                        self.tok_pos_stack.pop();
-                     } else {
-                        break;
-                     }
-                  }
-                  Node::Choice(end) => {
-                     if self.matched {
-                        dsp_elm!(pos, self.path, "{} |> {}", self.elm_pos, end);
-                        self.elm_pos = end;
-                        self.path.pop();
-                        self.tok_pos_stack.pop();
-                     } else if self.elm_pos == end {
-                        self.path.pop();
-                        self.tok_pos = self.pop_tok_pos();
-                     } else {
-                        self.tok_pos = self.last_tok_pos();
-                        break;
-                     }
-                  }
-                  Node::ZeroOrOne(end) => {
-                     if !self.matched {
-                        dsp_elm!(self.elm_pos, self.path, "{} 0> {}", self.elm_pos, end);
-                        self.elm_pos = end;
-                        self.path.pop();
-                        self.tok_pos = self.pop_tok_pos();
-                        self.matched = true;
-                     } else if self.elm_pos == end {
-                        self.path.pop();
-                        self.tok_pos_stack.pop();
-                     } else {
-                        break;
-                     }
-                  }
-                  Node::ZeroOrMore(end) => {
-                     if !self.matched {
-                        dsp_elm!(self.elm_pos, self.path, "{} *> {}", self.elm_pos, end);
-                        self.elm_pos = end;
-                        self.path.pop();
-                        self.tok_pos = self.pop_tok_pos();
-                        self.matched = true;
-                     } else if self.elm_pos == end {
-                        dsp_elm!(self.elm_pos, self.path, "{} <* {}", self.elm_pos, pos);
-                        self.elm_pos = pos + 1;
-                        *self.tok_pos_stack.last_mut().unwrap() = self.tok_pos;
-                        break;
-                     } else {
-                        break;
-                     }
-                  }
-                  Node::Reference(ref _element) => {
-                     dsp_elm!(self.elm_pos, self.path, "{} &> {}", self.elm_pos, pos + 1);
-                     self.elm_pos = pos + 1;
-                     self.path.pop();
-                  }
-                  _ => unreachable!(),
+                  self.tok_pos += 1;
+               } else {
+                  dsp_elm!(
+                     self.elm_pos,
+                     self.path,
+                     "TOK {:?} [{:03}]",
+                     tok_src,
+                     self.tok_pos
+                  );
                }
+               equal
             } else {
-               dsp_elm!(self.elm_pos, self.path, "{}", "FI");
-               return;
+               false
+            };
+
+            self.elm_pos += 1;
+
+            true
+         }
+         Node::Indentation(indentation) => {
+            let spaces = (self.current_indentation + indentation) * self.module_indentation;
+
+            self.matched = if spaces == 0 {
+               dsp_elm!(self.elm_pos, self.path, "{}Indentation 0", C_HIGHLIGHT);
+               true
+            } else if let Some(tok_src) = self.toks.get(self.tok_pos) {
+               let span = self.toks_meta[self.tok_pos].span;
+               let equal = tok_src == &Tok::Space && span == spaces;
+               if equal {
+                  dsp_elm!(
+                     self.elm_pos,
+                     self.path,
+                     "{}Indentation {} [{:03}]",
+                     C_HIGHLIGHT,
+                     span,
+                     self.tok_pos
+                  );
+
+                  self.tok_pos += 1;
+               } else {
+                  dsp_elm!(
+                     self.elm_pos,
+                     self.path,
+                     "Indentation {} [{:03}]",
+                     span,
+                     self.tok_pos
+                  );
+               }
+
+               equal
+            } else {
+               false
+            };
+
+            self.elm_pos += 1;
+
+            true
+         }
+      }
+   }
+
+   fn try_finalize(&mut self) -> bool {
+      loop {
+         if !self.path.is_empty() {
+            let pos = *self.path.last().unwrap();
+
+            dsp_elm!(
+               pos,
+               self.path,
+               "?? {:?} [{:03}] {}",
+               self.nodes[pos],
+               self.elm_pos,
+               self.matched
+            );
+
+            match self.nodes[pos] {
+               Node::Element(ref element) => {
+                  if element == &Element::Block {
+                     self.current_indentation -= 1;
+                  }
+                  self.path.pop();
+                  let element_tok_pos = self.pop_tok_pos();
+                  if self.matched {
+                     dsp_elm!(
+                        pos,
+                        self.path,
+                        "{}{:?} {}[{:03}-{:03}] <<",
+                        C_HIGHLIGHT,
+                        element,
+                        C_PUNCT,
+                        element_tok_pos,
+                        self.tok_pos
+                     );
+                  } else {
+                     debug_assert!(element_tok_pos == self.tok_pos);
+                     dsp_elm!(
+                        pos,
+                        self.path,
+                        "{}{:?} [{:03}-{:03}] <<",
+                        C_PUNCT,
+                        element,
+                        element_tok_pos,
+                        self.tok_pos
+                     );
+                  }
+               }
+               Node::Sequence(end) => {
+                  if !self.matched {
+                     dsp_elm!(pos, self.path, "{} -> {}", self.elm_pos, end);
+                     self.elm_pos = end;
+                     self.path.pop();
+                     self.tok_pos = self.pop_tok_pos();
+                  } else if self.elm_pos == end {
+                     self.path.pop();
+                     self.tok_pos_stack.pop();
+                  } else {
+                     return false;
+                  }
+               }
+               Node::Choice(end) => {
+                  if self.matched {
+                     dsp_elm!(pos, self.path, "{} |> {}", self.elm_pos, end);
+                     self.elm_pos = end;
+                     self.path.pop();
+                     self.tok_pos_stack.pop();
+                  } else if self.elm_pos == end {
+                     self.path.pop();
+                     self.tok_pos = self.pop_tok_pos();
+                  } else {
+                     self.tok_pos = self.last_tok_pos();
+                     return false;
+                  }
+               }
+               Node::ZeroOrOne(end) => {
+                  if !self.matched {
+                     dsp_elm!(self.elm_pos, self.path, "{} 0> {}", self.elm_pos, end);
+                     self.elm_pos = end;
+                     self.path.pop();
+                     self.tok_pos = self.pop_tok_pos();
+                     self.matched = true;
+                  } else if self.elm_pos == end {
+                     self.path.pop();
+                     self.tok_pos_stack.pop();
+                  } else {
+                     return false;
+                  }
+               }
+               Node::ZeroOrMore(end) => {
+                  if !self.matched {
+                     dsp_elm!(self.elm_pos, self.path, "{} *> {}", self.elm_pos, end);
+                     self.elm_pos = end;
+                     self.path.pop();
+                     self.tok_pos = self.pop_tok_pos();
+                     self.matched = true;
+                  } else if self.elm_pos == end {
+                     dsp_elm!(self.elm_pos, self.path, "{} <* {}", self.elm_pos, pos);
+                     self.elm_pos = pos + 1;
+                     *self.tok_pos_stack.last_mut().unwrap() = self.tok_pos;
+                     return false;
+                  } else {
+                     return false;
+                  }
+               }
+               Node::Reference(ref _element) => {
+                  dsp_elm!(self.elm_pos, self.path, "{} &> {}", self.elm_pos, pos + 1);
+                  self.elm_pos = pos + 1;
+                  self.path.pop();
+               }
+               _ => unreachable!(),
             }
+         } else {
+            dsp_elm!(self.elm_pos, self.path, "{}", "FI");
+            return true;
          }
       }
    }
