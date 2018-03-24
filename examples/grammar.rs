@@ -608,105 +608,141 @@ impl<'b, 't> TokParser<'b, 't> {
                self.matched
             );
 
-            match self.nodes[pos] {
-               Node::Element(ref element) => {
-                  if element == &Element::Block {
-                     self.current_indentation -= 1;
-                  }
-                  self.path.pop();
-                  let element_tok_pos = self.pop_tok_pos();
-                  if self.matched {
-                     dsp_elm!(
-                        pos,
-                        self.path,
-                        "{}{:?} {}[{:03}-{:03}] <<",
-                        C_HIGHLIGHT,
-                        element,
-                        C_PUNCT,
-                        element_tok_pos,
-                        self.tok_pos
-                     );
-                  } else {
-                     debug_assert!(element_tok_pos == self.tok_pos);
-                     dsp_elm!(
-                        pos,
-                        self.path,
-                        "{}{:?} [{:03}-{:03}] <<",
-                        C_PUNCT,
-                        element,
-                        element_tok_pos,
-                        self.tok_pos
-                     );
-                  }
-               }
-               Node::Sequence(end) => {
-                  if !self.matched {
-                     dsp_elm!(pos, self.path, "{} -> {}", self.elm_pos, end);
-                     self.elm_pos = end;
-                     self.path.pop();
-                     self.tok_pos = self.pop_tok_pos();
-                  } else if self.elm_pos == end {
-                     self.path.pop();
-                     self.tok_pos_stack.pop();
-                  } else {
-                     return false;
-                  }
-               }
-               Node::Choice(end) => {
-                  if self.matched {
-                     dsp_elm!(pos, self.path, "{} |> {}", self.elm_pos, end);
-                     self.elm_pos = end;
-                     self.path.pop();
-                     self.tok_pos_stack.pop();
-                  } else if self.elm_pos == end {
-                     self.path.pop();
-                     self.tok_pos = self.pop_tok_pos();
-                  } else {
-                     self.tok_pos = self.last_tok_pos();
-                     return false;
-                  }
-               }
-               Node::ZeroOrOne(end) => {
-                  if !self.matched {
-                     dsp_elm!(self.elm_pos, self.path, "{} 0> {}", self.elm_pos, end);
-                     self.elm_pos = end;
-                     self.path.pop();
-                     self.tok_pos = self.pop_tok_pos();
-                     self.matched = true;
-                  } else if self.elm_pos == end {
-                     self.path.pop();
-                     self.tok_pos_stack.pop();
-                  } else {
-                     return false;
-                  }
-               }
-               Node::ZeroOrMore(end) => {
-                  if !self.matched {
-                     dsp_elm!(self.elm_pos, self.path, "{} *> {}", self.elm_pos, end);
-                     self.elm_pos = end;
-                     self.path.pop();
-                     self.tok_pos = self.pop_tok_pos();
-                     self.matched = true;
-                  } else if self.elm_pos == end {
-                     dsp_elm!(self.elm_pos, self.path, "{} <* {}", self.elm_pos, pos);
-                     self.elm_pos = pos + 1;
-                     *self.tok_pos_stack.last_mut().unwrap() = self.tok_pos;
-                     return false;
-                  } else {
-                     return false;
-                  }
-               }
-               Node::Reference(ref _element) => {
-                  dsp_elm!(self.elm_pos, self.path, "{} &> {}", self.elm_pos, pos + 1);
-                  self.elm_pos = pos + 1;
-                  self.path.pop();
-               }
+            let exit = match self.nodes[pos] {
+               Node::Element(ref element) => self.try_finalize_element(element, pos),
+               Node::Reference(ref element) => self.try_finalize_reference(element, pos),
+               Node::Sequence(end) => self.try_finalize_sequence(end, pos),
+               Node::Choice(end) => self.try_finalize_choice(end, pos),
+               Node::ZeroOrOne(end) => self.try_finalize_zero_or_one(end, pos),
+               Node::ZeroOrMore(end) => self.try_finalize_zero_or_more(end, pos),
                _ => unreachable!(),
+            };
+
+            if exit {
+               return false;
             }
          } else {
             dsp_elm!(self.elm_pos, self.path, "{}", "FI");
             return true;
          }
+      }
+   }
+
+   fn try_finalize_element(&mut self, element: &Element, pos: usize) -> bool {
+      if element == &Element::Block {
+         self.current_indentation -= 1;
+      }
+      self.path.pop();
+      let element_tok_pos = self.pop_tok_pos();
+      if self.matched {
+         dsp_elm!(
+            pos,
+            self.path,
+            "{}{:?} {}[{:03}-{:03}] <<",
+            C_HIGHLIGHT,
+            element,
+            C_PUNCT,
+            element_tok_pos,
+            self.tok_pos
+         );
+      } else {
+         debug_assert!(element_tok_pos == self.tok_pos);
+         dsp_elm!(
+            pos,
+            self.path,
+            "{}{:?} [{:03}-{:03}] <<",
+            C_PUNCT,
+            element,
+            element_tok_pos,
+            self.tok_pos
+         );
+      }
+
+      false
+   }
+
+   fn try_finalize_reference(&mut self, _element: &Element, pos: usize) -> bool {
+      dsp_elm!(self.elm_pos, self.path, "{} &> {}", self.elm_pos, pos + 1);
+      self.elm_pos = pos + 1;
+      self.path.pop();
+
+      false
+   }
+
+   fn try_finalize_sequence(&mut self, end: usize, pos: usize) -> bool {
+      if !self.matched {
+         dsp_elm!(pos, self.path, "{} -> {}", self.elm_pos, end);
+         self.elm_pos = end;
+         self.path.pop();
+         self.tok_pos = self.pop_tok_pos();
+
+         false
+      } else if self.elm_pos == end {
+         self.path.pop();
+         self.tok_pos_stack.pop();
+
+         false
+      } else {
+         true
+      }
+   }
+
+   fn try_finalize_choice(&mut self, end: usize, pos: usize) -> bool {
+      if self.matched {
+         dsp_elm!(pos, self.path, "{} |> {}", self.elm_pos, end);
+         self.elm_pos = end;
+         self.path.pop();
+         self.tok_pos_stack.pop();
+
+         false
+      } else if self.elm_pos == end {
+         self.path.pop();
+         self.tok_pos = self.pop_tok_pos();
+
+         false
+      } else {
+         self.tok_pos = self.last_tok_pos();
+
+         true
+      }
+   }
+
+   fn try_finalize_zero_or_one(&mut self, end: usize, _pos: usize) -> bool {
+      if !self.matched {
+         dsp_elm!(self.elm_pos, self.path, "{} 0> {}", self.elm_pos, end);
+         self.elm_pos = end;
+         self.path.pop();
+         self.tok_pos = self.pop_tok_pos();
+         self.matched = true;
+
+         false
+      } else if self.elm_pos == end {
+         self.path.pop();
+         self.tok_pos_stack.pop();
+
+         false
+      } else {
+         true
+      }
+   }
+
+   fn try_finalize_zero_or_more(&mut self, end: usize, pos: usize) -> bool {
+      if !self.matched {
+         dsp_elm!(self.elm_pos, self.path, "{} *> {}", self.elm_pos, end);
+         self.elm_pos = end;
+         self.path.pop();
+         self.tok_pos = self.pop_tok_pos();
+         self.matched = true;
+
+         false
+      } else if self.elm_pos == end {
+         dsp_elm!(self.elm_pos, self.path, "{} <* {}", self.elm_pos, pos);
+         self.elm_pos = pos + 1;
+         *self.tok_pos_stack.last_mut().unwrap() = self.tok_pos;
+
+         true
+      } else {
+         true
       }
    }
 
