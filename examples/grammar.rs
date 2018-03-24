@@ -469,117 +469,129 @@ impl<'b, 't> TokParser<'b, 't> {
       dsp_elm!(self.elm_pos, self.path, "{:?}", self.nodes[self.elm_pos]);
 
       match self.nodes[self.elm_pos] {
-         Node::Element(ref element) => {
+         Node::Element(ref element) => self.process_element(element),
+         Node::Sequence(end) | Node::ZeroOrOne(end) | Node::ZeroOrMore(end) | Node::Choice(end) => {
+            self.process_list(end)
+         }
+         Node::Reference(ref element) => self.process_reference(element),
+         Node::Tok(ref tok) => self.process_tok(tok),
+         Node::Indentation(indentation) => self.process_indentation(indentation),
+      }
+   }
+
+   fn process_element(&mut self, element: &Element) -> bool {
+      dsp_elm!(
+         self.elm_pos,
+         self.path,
+         "{}{:?} [{:03}] >>",
+         C_PUNCT,
+         element,
+         self.tok_pos
+      );
+      if element == &Element::Block {
+         self.current_indentation += 1;
+      }
+      self.path.push(self.elm_pos);
+      self.tok_pos_stack.push(self.tok_pos);
+      self.elm_pos += 1;
+
+      false
+   }
+
+   fn process_list(&mut self, end: usize) -> bool {
+      debug_assert!(self.elm_pos < end);
+      self.path.push(self.elm_pos);
+      self.tok_pos_stack.push(self.tok_pos);
+      self.elm_pos += 1;
+
+      false
+   }
+
+   fn process_reference(&mut self, element: &Element) -> bool {
+      if self.tok_pos == self.toks.len() {
+         self.matched = false;
+         self.elm_pos += 1;
+
+         true
+      } else {
+         self.path.push(self.elm_pos);
+         self.elm_pos = self.elements[*element as usize];
+
+         false
+      }
+   }
+
+   fn process_tok(&mut self, tok: &Tok) -> bool {
+      self.matched = if let Some(tok_src) = self.toks.get(self.tok_pos) {
+         let equal = tok == tok_src;
+         if equal {
             dsp_elm!(
                self.elm_pos,
                self.path,
-               "{}{:?} [{:03}] >>",
-               C_PUNCT,
-               element,
+               "{}TOK {:?} [{:03}]",
+               C_HIGHLIGHT,
+               tok_src,
                self.tok_pos
             );
-            if element == &Element::Block {
-               self.current_indentation += 1;
-            }
-            self.path.push(self.elm_pos);
-            self.tok_pos_stack.push(self.tok_pos);
-            self.elm_pos += 1;
 
-            false
+            self.tok_pos += 1;
+         } else {
+            dsp_elm!(
+               self.elm_pos,
+               self.path,
+               "TOK {:?} [{:03}]",
+               tok_src,
+               self.tok_pos
+            );
          }
-         Node::Sequence(end) | Node::ZeroOrOne(end) | Node::ZeroOrMore(end) | Node::Choice(end) => {
-            debug_assert!(self.elm_pos < end);
-            self.path.push(self.elm_pos);
-            self.tok_pos_stack.push(self.tok_pos);
-            self.elm_pos += 1;
+         equal
+      } else {
+         false
+      };
 
-            false
+      self.elm_pos += 1;
+
+      true
+   }
+
+   fn process_indentation(&mut self, indentation: usize) -> bool {
+      let spaces = (self.current_indentation + indentation) * self.module_indentation;
+
+      self.matched = if spaces == 0 {
+         dsp_elm!(self.elm_pos, self.path, "{}Indentation 0", C_HIGHLIGHT);
+         true
+      } else if let Some(tok_src) = self.toks.get(self.tok_pos) {
+         let span = self.toks_meta[self.tok_pos].span;
+         let equal = tok_src == &Tok::Space && span == spaces;
+         if equal {
+            dsp_elm!(
+               self.elm_pos,
+               self.path,
+               "{}Indentation {} [{:03}]",
+               C_HIGHLIGHT,
+               span,
+               self.tok_pos
+            );
+
+            self.tok_pos += 1;
+         } else {
+            dsp_elm!(
+               self.elm_pos,
+               self.path,
+               "Indentation {} [{:03}]",
+               span,
+               self.tok_pos
+            );
          }
-         Node::Reference(ref element) => {
-            if self.tok_pos == self.toks.len() {
-               self.matched = false;
-               self.elm_pos += 1;
 
-               true
-            } else {
-               self.path.push(self.elm_pos);
-               self.elm_pos = self.elements[*element as usize];
+         equal
+      } else {
+         false
+      };
 
-               false
-            }
-         }
-         Node::Tok(ref tok) => {
-            self.matched = if let Some(tok_src) = self.toks.get(self.tok_pos) {
-               let equal = tok == tok_src;
-               if equal {
-                  dsp_elm!(
-                     self.elm_pos,
-                     self.path,
-                     "{}TOK {:?} [{:03}]",
-                     C_HIGHLIGHT,
-                     tok_src,
-                     self.tok_pos
-                  );
+      self.elm_pos += 1;
 
-                  self.tok_pos += 1;
-               } else {
-                  dsp_elm!(
-                     self.elm_pos,
-                     self.path,
-                     "TOK {:?} [{:03}]",
-                     tok_src,
-                     self.tok_pos
-                  );
-               }
-               equal
-            } else {
-               false
-            };
-
-            self.elm_pos += 1;
-
-            true
-         }
-         Node::Indentation(indentation) => {
-            let spaces = (self.current_indentation + indentation) * self.module_indentation;
-
-            self.matched = if spaces == 0 {
-               dsp_elm!(self.elm_pos, self.path, "{}Indentation 0", C_HIGHLIGHT);
-               true
-            } else if let Some(tok_src) = self.toks.get(self.tok_pos) {
-               let span = self.toks_meta[self.tok_pos].span;
-               let equal = tok_src == &Tok::Space && span == spaces;
-               if equal {
-                  dsp_elm!(
-                     self.elm_pos,
-                     self.path,
-                     "{}Indentation {} [{:03}]",
-                     C_HIGHLIGHT,
-                     span,
-                     self.tok_pos
-                  );
-
-                  self.tok_pos += 1;
-               } else {
-                  dsp_elm!(
-                     self.elm_pos,
-                     self.path,
-                     "Indentation {} [{:03}]",
-                     span,
-                     self.tok_pos
-                  );
-               }
-
-               equal
-            } else {
-               false
-            };
-
-            self.elm_pos += 1;
-
-            true
-         }
-      }
+      true
    }
 
    fn try_finalize(&mut self) -> bool {
