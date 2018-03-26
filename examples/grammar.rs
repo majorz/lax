@@ -50,14 +50,14 @@ fn main() {
       f(&mut builder);
    }
 
-   let (nodes, elements) = builder.destructure();
+   let (instructions, elements) = builder.destructure();
 
    println!("{}----------------{}", C_DOTS, C_RESET);
 
-   nodes
+   instructions
       .iter()
       .enumerate()
-      .for_each(|(i, node)| printi!("{}{:?}{}", i, C_TEXT, node, C_RESET));
+      .for_each(|(i, instruction)| printi!("{}{:?}{}", i, C_TEXT, instruction, C_RESET));
 
    println!("{}----------------{}", C_DOTS, C_RESET);
 
@@ -111,7 +111,13 @@ fn main() {
 
    println!("{}================{}", C_DOTS, C_RESET);
 
-   TokParser::new(&nodes, &elements, &toks, &toks_meta, module_indentation).parse();
+   TokParser::new(
+      &instructions,
+      &elements,
+      &toks,
+      &toks_meta,
+      module_indentation,
+   ).parse();
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -295,7 +301,7 @@ fn number(b: &mut Builder) {
 }
 
 #[derive(Debug)]
-enum Node {
+enum Instruction {
    Element(Element),
    Reference(Element),
    Tok(Tok),
@@ -307,7 +313,7 @@ enum Node {
 }
 
 struct Builder {
-   nodes: Vec<Node>,
+   instructions: Vec<Instruction>,
    starts: Vec<usize>,
    elements: [usize; ELEMENTS_COUNT],
 }
@@ -315,22 +321,24 @@ struct Builder {
 impl Builder {
    fn new() -> Self {
       Builder {
-         nodes: Vec::new(),
+         instructions: Vec::new(),
          starts: Vec::new(),
          elements: [0; ELEMENTS_COUNT],
       }
    }
 
-   fn destructure(self) -> (Vec<Node>, [usize; ELEMENTS_COUNT]) {
+   fn destructure(self) -> (Vec<Instruction>, [usize; ELEMENTS_COUNT]) {
       let Self {
-         nodes, elements, ..
+         instructions,
+         elements,
+         ..
       } = self;
-      (nodes, elements)
+      (instructions, elements)
    }
 
    fn element(&mut self, element: Element) -> &mut Self {
-      self.elements[element as usize] = self.nodes.len();
-      self.nodes.push(Node::Element(element));
+      self.elements[element as usize] = self.instructions.len();
+      self.instructions.push(Instruction::Element(element));
       self
    }
 
@@ -349,43 +357,45 @@ impl Builder {
    }
 
    fn indentation(&mut self, indentation: usize) -> &mut Self {
-      self.nodes.push(Node::Indentation(indentation));
+      self
+         .instructions
+         .push(Instruction::Indentation(indentation));
       self
    }
 
    fn reference(&mut self, element: Element) -> &mut Self {
-      self.nodes.push(Node::Reference(element));
+      self.instructions.push(Instruction::Reference(element));
       self
    }
 
    fn tok(&mut self, tok: Tok) -> &mut Self {
-      self.nodes.push(Node::Tok(tok));
+      self.instructions.push(Instruction::Tok(tok));
       self
    }
 
    fn sequence(&mut self) -> &mut Self {
-      self.start(Node::Sequence(0));
+      self.start(Instruction::Sequence(0));
       self
    }
 
    fn choice(&mut self) -> &mut Self {
-      self.start(Node::Choice(0));
+      self.start(Instruction::Choice(0));
       self
    }
 
    fn zero_or_one(&mut self) -> &mut Self {
-      self.start(Node::ZeroOrOne(0));
+      self.start(Instruction::ZeroOrOne(0));
       self
    }
 
    fn zero_or_more(&mut self) -> &mut Self {
-      self.start(Node::ZeroOrMore(0));
+      self.start(Instruction::ZeroOrMore(0));
       self
    }
 
-   fn start(&mut self, parent: Node) -> &mut Self {
-      self.starts.push(self.nodes.len());
-      self.nodes.push(parent);
+   fn start(&mut self, parent: Instruction) -> &mut Self {
+      self.starts.push(self.instructions.len());
+      self.instructions.push(parent);
       self
    }
 
@@ -394,15 +404,15 @@ impl Builder {
 
       let start = self.starts.pop().unwrap();
 
-      debug_assert!(self.nodes.len() > start);
+      debug_assert!(self.instructions.len() > start);
 
-      let end = self.nodes.len();
+      let end = self.instructions.len();
 
-      match *unsafe { self.nodes.get_unchecked_mut(start) } {
-         Node::Sequence(ref mut i)
-         | Node::Choice(ref mut i)
-         | Node::ZeroOrOne(ref mut i)
-         | Node::ZeroOrMore(ref mut i) => *i = end,
+      match *unsafe { self.instructions.get_unchecked_mut(start) } {
+         Instruction::Sequence(ref mut i)
+         | Instruction::Choice(ref mut i)
+         | Instruction::ZeroOrOne(ref mut i)
+         | Instruction::ZeroOrMore(ref mut i) => *i = end,
          _ => unreachable!(),
       }
 
@@ -411,7 +421,7 @@ impl Builder {
 }
 
 struct TokParser<'b, 't> {
-   nodes: &'b [Node],
+   instructions: &'b [Instruction],
    elements: &'b [usize; ELEMENTS_COUNT],
    toks: &'t [Tok],
    toks_meta: &'t [TokMeta],
@@ -426,7 +436,7 @@ struct TokParser<'b, 't> {
 
 impl<'b, 't> TokParser<'b, 't> {
    fn new(
-      nodes: &'b [Node],
+      instructions: &'b [Instruction],
       elements: &'b [usize; ELEMENTS_COUNT],
       toks: &'t [Tok],
       toks_meta: &'t [TokMeta],
@@ -443,7 +453,7 @@ impl<'b, 't> TokParser<'b, 't> {
       let matched = false;
 
       TokParser {
-         nodes,
+         instructions,
          elements,
          toks,
          toks_meta,
@@ -466,16 +476,22 @@ impl<'b, 't> TokParser<'b, 't> {
    }
 
    fn process_next(&mut self) -> bool {
-      dsp_elm!(self.elm_pos, self.path, "{:?}", self.nodes[self.elm_pos]);
+      dsp_elm!(
+         self.elm_pos,
+         self.path,
+         "{:?}",
+         self.instructions[self.elm_pos]
+      );
 
-      match self.nodes[self.elm_pos] {
-         Node::Element(ref element) => self.process_element(element),
-         Node::Sequence(end) | Node::ZeroOrOne(end) | Node::ZeroOrMore(end) | Node::Choice(end) => {
-            self.process_list(end)
-         }
-         Node::Reference(ref element) => self.process_reference(element),
-         Node::Tok(ref tok) => self.process_tok(tok),
-         Node::Indentation(indentation) => self.process_indentation(indentation),
+      match self.instructions[self.elm_pos] {
+         Instruction::Element(ref element) => self.process_element(element),
+         Instruction::Sequence(end)
+         | Instruction::ZeroOrOne(end)
+         | Instruction::ZeroOrMore(end)
+         | Instruction::Choice(end) => self.process_list(end),
+         Instruction::Reference(ref element) => self.process_reference(element),
+         Instruction::Tok(ref tok) => self.process_tok(tok),
+         Instruction::Indentation(indentation) => self.process_indentation(indentation),
       }
    }
 
@@ -603,18 +619,18 @@ impl<'b, 't> TokParser<'b, 't> {
                pos,
                self.path,
                "?? {:?} [{:03}] {}",
-               self.nodes[pos],
+               self.instructions[pos],
                self.elm_pos,
                self.matched
             );
 
-            let exit = match self.nodes[pos] {
-               Node::Element(ref element) => self.try_finalize_element(element, pos),
-               Node::Reference(ref element) => self.try_finalize_reference(element, pos),
-               Node::Sequence(end) => self.try_finalize_sequence(end, pos),
-               Node::Choice(end) => self.try_finalize_choice(end, pos),
-               Node::ZeroOrOne(end) => self.try_finalize_zero_or_one(end, pos),
-               Node::ZeroOrMore(end) => self.try_finalize_zero_or_more(end, pos),
+            let exit = match self.instructions[pos] {
+               Instruction::Element(ref element) => self.try_finalize_element(element, pos),
+               Instruction::Reference(ref element) => self.try_finalize_reference(element, pos),
+               Instruction::Sequence(end) => self.try_finalize_sequence(end, pos),
+               Instruction::Choice(end) => self.try_finalize_choice(end, pos),
+               Instruction::ZeroOrOne(end) => self.try_finalize_zero_or_one(end, pos),
+               Instruction::ZeroOrMore(end) => self.try_finalize_zero_or_more(end, pos),
                _ => unreachable!(),
             };
 
