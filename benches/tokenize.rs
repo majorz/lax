@@ -5,9 +5,9 @@ extern crate lax;
 
 use criterion::Criterion;
 
-use std::iter;
 use std::fs::File;
 use std::io::prelude::*;
+use std::iter;
 
 use lax::tokenize::*;
 

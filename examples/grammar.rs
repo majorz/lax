@@ -1,31 +1,21 @@
 extern crate lax;
-extern crate termion;
 
-use std::usize;
 use std::fs::File;
 use std::io::prelude::*;
+use std::usize;
 
-use termion::color;
-
-use lax::tokenize::*;
 use lax::indentation::estimate_indentation;
-
-const C_RESET: color::Fg<color::Reset> = color::Fg(color::Reset);
-const C_HIGHLIGHT: color::Fg<color::Rgb> = color::Fg(color::Rgb(255, 116, 79));
-const C_DOTS: color::Fg<color::Rgb> = color::Fg(color::Rgb(115, 55, 100));
-const C_INDEX: color::Fg<color::Rgb> = color::Fg(color::Rgb(177, 65, 149));
-const C_PUNCT: color::Fg<color::Rgb> = color::Fg(color::Rgb(216, 46, 0));
-const C_TEXT: color::Fg<color::Rgb> = color::Fg(color::Rgb(121, 166, 169));
+use lax::tokenize::*;
 
 macro_rules! dsp_elm {
    ($elm_pos:expr, $path:expr, $fmt:expr, $($arg:tt)*) => {
-      printi!(concat!("{}.{} {}", $fmt, "{}"), $elm_pos, C_DOTS, "..".repeat($path.len()), C_TEXT, $($arg)*, C_RESET);
+      printi!(concat!("{}. ", $fmt), $elm_pos, "..".repeat($path.len()), $($arg)*);
    };
 }
 
 macro_rules! printi {
    ($fmt:expr, $pos:expr, $($arg:tt)*) => {
-      println!(concat!("{}[{}{:03}{}]{} ", $fmt), C_DOTS, C_INDEX, $pos, C_DOTS, C_RESET, $($arg)*);
+      println!(concat!("[{:03}] ", $fmt), $pos, $($arg)*);
    };
 }
 
@@ -52,21 +42,21 @@ fn main() {
 
    let (instructions, elements) = builder.destructure();
 
-   println!("{}----------------{}", C_DOTS, C_RESET);
+   println!("----------------");
 
    instructions
       .iter()
       .enumerate()
-      .for_each(|(i, instruction)| printi!("{}{:?}{}", i, C_TEXT, instruction, C_RESET));
+      .for_each(|(i, instruction)| printi!("{:?}", i, instruction));
 
-   println!("{}----------------{}", C_DOTS, C_RESET);
+   println!("----------------");
 
    elements
       .iter()
       .enumerate()
-      .for_each(|(i, pos)| printi!("{}{}{}", i, C_TEXT, pos, C_RESET));
+      .for_each(|(i, pos)| printi!("{}", i, pos));
 
-   println!("{}----------------{}", C_DOTS, C_RESET);
+   println!("----------------");
 
    let mut f = File::open("lax/block.lax").expect("file not found");
 
@@ -76,40 +66,31 @@ fn main() {
 
    let chars: Vec<_> = source.chars().collect();
 
-   println!(
-      "{}Length: {}{}{}",
-      C_TEXT,
-      C_HIGHLIGHT,
-      chars.len(),
-      C_RESET
-   );
+   println!("Length: {}", chars.len(),);
 
-   println!("{}----------------{}", C_DOTS, C_RESET);
+   println!("----------------");
 
    let (toks, toks_meta) = tokenize(&chars);
 
    toks
       .iter()
       .enumerate()
-      .for_each(|(i, tok)| printi!("{}{:?}{}", i, C_TEXT, tok, C_RESET));
+      .for_each(|(i, tok)| printi!("{:?}", i, tok));
 
-   println!("{}----------------{}", C_DOTS, C_RESET);
+   println!("----------------");
 
    toks_meta
       .iter()
       .enumerate()
-      .for_each(|(i, tok_meta)| printi!("{}{:?}{}", i, C_TEXT, tok_meta, C_RESET));
+      .for_each(|(i, tok_meta)| printi!("{:?}", i, tok_meta));
 
-   println!("{}----------------{}", C_DOTS, C_RESET);
+   println!("----------------");
 
    let module_indentation = estimate_indentation(&toks, &toks_meta);
 
-   println!(
-      "{}Indentation: {}{}{}",
-      C_TEXT, C_HIGHLIGHT, module_indentation, C_RESET
-   );
+   println!("Indentation: {}", module_indentation);
 
-   println!("{}================{}", C_DOTS, C_RESET);
+   println!("================");
 
    TokParser::new(
       &instructions,
@@ -499,8 +480,7 @@ impl<'b, 't> TokParser<'b, 't> {
       dsp_elm!(
          self.elm_pos,
          self.path,
-         "{}{:?} [{:03}] >>",
-         C_PUNCT,
+         "{:?} [{:03}] >>",
          element,
          self.tok_pos
       );
@@ -544,8 +524,7 @@ impl<'b, 't> TokParser<'b, 't> {
             dsp_elm!(
                self.elm_pos,
                self.path,
-               "{}TOK {:?} [{:03}]",
-               C_HIGHLIGHT,
+               "TOK {:?} [{:03}]",
                tok_src,
                self.tok_pos
             );
@@ -574,7 +553,7 @@ impl<'b, 't> TokParser<'b, 't> {
       let spaces = (self.current_indentation + indentation) * self.module_indentation;
 
       self.matched = if spaces == 0 {
-         dsp_elm!(self.elm_pos, self.path, "{}Indentation 0", C_HIGHLIGHT);
+         dsp_elm!(self.elm_pos, self.path, "Indentation {}", 0);
          true
       } else if let Some(tok_src) = self.toks.get(self.tok_pos) {
          let span = self.toks_meta[self.tok_pos].span;
@@ -583,8 +562,7 @@ impl<'b, 't> TokParser<'b, 't> {
             dsp_elm!(
                self.elm_pos,
                self.path,
-               "{}Indentation {} [{:03}]",
-               C_HIGHLIGHT,
+               "Indentation {} [{:03}]",
                span,
                self.tok_pos
             );
@@ -654,10 +632,8 @@ impl<'b, 't> TokParser<'b, 't> {
          dsp_elm!(
             pos,
             self.path,
-            "{}{:?} {}[{:03}-{:03}] <<",
-            C_HIGHLIGHT,
+            "{:?} [{:03}-{:03}] <<",
             element,
-            C_PUNCT,
             element_tok_pos,
             self.tok_pos
          );
@@ -666,8 +642,7 @@ impl<'b, 't> TokParser<'b, 't> {
          dsp_elm!(
             pos,
             self.path,
-            "{}{:?} [{:03}-{:03}] <<",
-            C_PUNCT,
+            "{:?} [{:03}-{:03}] <<",
             element,
             element_tok_pos,
             self.tok_pos

@@ -89,9 +89,11 @@ mod tests {
          let source = indoc!($string);
          let chars: Vec<_> = source.chars().collect();
          let (toks, toks_meta) = tokenize(&chars);
-         let estimated = IndentationEstimator::new().count(&toks, &toks_meta).estimate();
+         let estimated = IndentationEstimator::new()
+            .count(&toks, &toks_meta)
+            .estimate();
          assert_eq!(estimated, $expected);
-      }
+      };
    }
 
    #[test]

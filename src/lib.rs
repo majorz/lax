@@ -2,6 +2,6 @@
 #[macro_use]
 extern crate indoc;
 
-pub mod tokenize;
-pub mod indentation;
 pub mod advancer;
+pub mod indentation;
+pub mod tokenize;

@@ -104,7 +104,9 @@ fn identifier(advancer: &mut CharAdvancer) -> TokMatch {
 
    advancer.zero_or_more(
       (|c| {
-         (*c >= 'a' && *c <= 'z') || (*c >= 'A' && *c <= 'Z') || (*c >= '0' && *c <= '9')
+         (*c >= 'a' && *c <= 'z')
+            || (*c >= 'A' && *c <= 'Z')
+            || (*c >= '0' && *c <= '9')
             || *c == '_'
       }) as FnMatcher,
    );
@@ -161,13 +163,17 @@ fn try_keyword(advancer: &CharAdvancer) -> Tok {
       }
       4 => {
          if unsafe {
-            *w.get_unchecked(0) == 'l' && *w.get_unchecked(1) == 'o' && *w.get_unchecked(2) == 'o'
+            *w.get_unchecked(0) == 'l'
+               && *w.get_unchecked(1) == 'o'
+               && *w.get_unchecked(2) == 'o'
                && *w.get_unchecked(3) == 'p'
          } {
             return Tok::Loop;
          }
          if unsafe {
-            *w.get_unchecked(0) == 't' && *w.get_unchecked(1) == 'r' && *w.get_unchecked(2) == 'u'
+            *w.get_unchecked(0) == 't'
+               && *w.get_unchecked(1) == 'r'
+               && *w.get_unchecked(2) == 'u'
                && *w.get_unchecked(3) == 'e'
          } {
             return Tok::True;
@@ -175,20 +181,29 @@ fn try_keyword(advancer: &CharAdvancer) -> Tok {
       }
       5 => {
          if unsafe {
-            *w.get_unchecked(0) == 'b' && *w.get_unchecked(1) == 'r' && *w.get_unchecked(2) == 'e'
-               && *w.get_unchecked(3) == 'a' && *w.get_unchecked(4) == 'k'
+            *w.get_unchecked(0) == 'b'
+               && *w.get_unchecked(1) == 'r'
+               && *w.get_unchecked(2) == 'e'
+               && *w.get_unchecked(3) == 'a'
+               && *w.get_unchecked(4) == 'k'
          } {
             return Tok::Break;
          }
          if unsafe {
-            *w.get_unchecked(0) == 'f' && *w.get_unchecked(1) == 'a' && *w.get_unchecked(2) == 'l'
-               && *w.get_unchecked(3) == 's' && *w.get_unchecked(4) == 'e'
+            *w.get_unchecked(0) == 'f'
+               && *w.get_unchecked(1) == 'a'
+               && *w.get_unchecked(2) == 'l'
+               && *w.get_unchecked(3) == 's'
+               && *w.get_unchecked(4) == 'e'
          } {
             return Tok::False;
          }
          if unsafe {
-            *w.get_unchecked(0) == 'm' && *w.get_unchecked(1) == 'a' && *w.get_unchecked(2) == 't'
-               && *w.get_unchecked(3) == 'c' && *w.get_unchecked(4) == 'h'
+            *w.get_unchecked(0) == 'm'
+               && *w.get_unchecked(1) == 'a'
+               && *w.get_unchecked(2) == 't'
+               && *w.get_unchecked(3) == 'c'
+               && *w.get_unchecked(4) == 'h'
          } {
             return Tok::Match;
          }
@@ -450,34 +465,34 @@ mod tests {
    }
 
    macro_rules! m {
-      ($matcher:ident, $input:expr) => (
+      ($matcher:ident, $input:expr) => {
          let chars = as_chars($input);
          let mut advancer = CharAdvancer::new(&chars);
          assert_eq!($matcher(&mut advancer), None);
-      );
+      };
 
-      ($matcher:ident, $input:expr, $tok:expr, $end:expr) => (
+      ($matcher:ident, $input:expr, $tok:expr, $end:expr) => {
          let chars = as_chars($input);
          let mut advancer = CharAdvancer::new(&chars);
          assert_eq!($matcher(&mut advancer), Some(($tok, $end)));
-      );
+      };
    }
 
    #[cfg(debug_assertions)]
    macro_rules! e {
-      ($matcher:ident) => (
+      ($matcher:ident) => {
          $matcher(&mut CharAdvancer::new(&[]));
-      )
+      };
    }
 
    macro_rules! string {
-      ($input:expr) => (
+      ($input:expr) => {
          let chars = as_chars($input);
          let mut tokenizer = Tokenizer::new(&chars);
          assert!(tokenizer.match_string().is_none());
-      );
+      };
 
-      ($input:expr, $span:expr) => (
+      ($input:expr, $span:expr) => {
          let chars = as_chars($input);
          let mut tokenizer = Tokenizer::new(&chars);
          assert!(tokenizer.match_string().is_some());
@@ -502,7 +517,7 @@ mod tests {
             assert_eq!(toks_meta[2].end, $span + 2);
             assert_eq!(toks_meta[2].span, 1);
          }
-      );
+      };
    }
 
    #[test]
