@@ -317,12 +317,14 @@ struct Tokenizer<'s> {
    line: usize,
    col: usize,
    advancer: CharAdvancer<'s>,
+   sol_indices: Vec<usize>,
 }
 
 impl<'s> Tokenizer<'s> {
    fn new(chars: &'s [char]) -> Self {
       let toks = vec![];
       let toks_meta = vec![];
+      let sol_indices = vec![0];
 
       let end = 0;
       let line = 1;
@@ -337,15 +339,16 @@ impl<'s> Tokenizer<'s> {
          line,
          col,
          advancer,
+         sol_indices,
       }
    }
 
-   fn destructure(self) -> (Vec<Tok>, Vec<TokMeta>) {
+   fn destructure(self) -> (Vec<Tok>, Vec<TokMeta>, Vec<usize>) {
       let Self {
-         toks, toks_meta, ..
+         toks, toks_meta, sol_indices, ..
       } = self;
 
-      (toks, toks_meta)
+      (toks, toks_meta, sol_indices)
    }
 
    fn push(&mut self, tok: Tok, end: usize) {
@@ -380,6 +383,8 @@ impl<'s> Tokenizer<'s> {
       if !line_end {
          let end = self.end;
          self.push(Tok::LineEnd, end);
+      } else {
+         self.sol_indices.pop();
       }
 
       self
@@ -394,6 +399,7 @@ impl<'s> Tokenizer<'s> {
          if after_new_line {
             self.line += 1;
             self.col = 1;
+            self.sol_indices.push(self.toks.len());
          }
       } else {
          panic!(
@@ -446,7 +452,7 @@ impl<'s> Tokenizer<'s> {
    }
 }
 
-pub fn tokenize(chars: &[char]) -> (Vec<Tok>, Vec<TokMeta>) {
+pub fn tokenize(chars: &[char]) -> (Vec<Tok>, Vec<TokMeta>, Vec<usize>) {
    Tokenizer::new(chars).tokenize().destructure()
 }
 
@@ -490,7 +496,7 @@ mod tests {
          let chars = as_chars($input);
          let mut tokenizer = Tokenizer::new(&chars);
          assert!(tokenizer.match_string().is_some());
-         let (toks, toks_meta) = tokenizer.destructure();
+         let (toks, toks_meta, _) = tokenizer.destructure();
          if $span == 0 {
             assert_eq!(toks.len(), 2);
             assert_eq!(toks[0], Tok::Apostrophe);
