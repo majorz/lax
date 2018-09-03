@@ -313,7 +313,6 @@ fn choose_matcher(advancer: &mut CharAdvancer) -> TokMatch {
 struct Tokenizer<'s> {
    toks: Vec<Tok>,
    toks_meta: Vec<TokMeta>,
-   after_new_line: bool,
    end: usize,
    line: usize,
    col: usize,
@@ -325,8 +324,6 @@ impl<'s> Tokenizer<'s> {
       let toks = vec![];
       let toks_meta = vec![];
 
-      let after_new_line = true;
-
       let end = 0;
       let line = 1;
       let col = 1;
@@ -336,7 +333,6 @@ impl<'s> Tokenizer<'s> {
       Tokenizer {
          toks,
          toks_meta,
-         after_new_line,
          end,
          line,
          col,
@@ -391,11 +387,11 @@ impl<'s> Tokenizer<'s> {
 
    fn match_tok(&mut self) {
       if let Some((tok, end)) = choose_matcher(&mut self.advancer) {
-         self.after_new_line = tok == Tok::LineEnd;
+         let after_new_line = tok == Tok::LineEnd;
 
          self.push(tok, end);
 
-         if self.after_new_line {
+         if after_new_line {
             self.line += 1;
             self.col = 1;
          }
@@ -445,8 +441,6 @@ impl<'s> Tokenizer<'s> {
       self.push(Tok::Apostrophe, after);
 
       self.advancer.consume();
-
-      self.after_new_line = false;
 
       Some(())
    }
