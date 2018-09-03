@@ -300,7 +300,7 @@ const MATCHERS: &[fn(advancer: &mut CharAdvancer) -> TokMatch] = &[
    full_stop,
 ];
 
-fn choose_matcher(advancer: &mut CharAdvancer) -> TokMatch {
+fn run_matchers(advancer: &mut CharAdvancer) -> TokMatch {
    for matcher in MATCHERS {
       if let Some((tok, end)) = matcher(advancer) {
          return Some((tok, end));
@@ -386,7 +386,7 @@ impl<'s> Tokenizer<'s> {
    }
 
    fn match_tok(&mut self) {
-      if let Some((tok, end)) = choose_matcher(&mut self.advancer) {
+      if let Some((tok, end)) = run_matchers(&mut self.advancer) {
          let after_new_line = tok == Tok::LineEnd;
 
          self.push(tok, end);
