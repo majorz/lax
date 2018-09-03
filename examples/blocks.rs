@@ -41,9 +41,7 @@ fn main() {
 
    println!("----------------");
 
-   sol_indices
-      .iter()
-      .for_each(|pos| println!("{}", pos));
+   sol_indices.iter().for_each(|pos| println!("{}", pos));
 
    println!("----------------");
 

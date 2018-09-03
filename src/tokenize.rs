@@ -345,7 +345,10 @@ impl<'s> Tokenizer<'s> {
 
    fn destructure(self) -> (Vec<Tok>, Vec<TokMeta>, Vec<usize>) {
       let Self {
-         toks, toks_meta, sol_indices, ..
+         toks,
+         toks_meta,
+         sol_indices,
+         ..
       } = self;
 
       (toks, toks_meta, sol_indices)
