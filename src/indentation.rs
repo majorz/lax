@@ -13,10 +13,10 @@ impl IndentationEstimator {
       }
    }
 
-   fn count(mut self, toks: &[Tok], toks_meta: &[TokMeta], sol_indices: &[usize]) -> Self {
+   fn count(mut self, toks: &[Tok], toks_meta: &[TokMeta], line_starts: &[usize]) -> Self {
       let mut prev_space_span = 0;
 
-      for i in sol_indices {
+      for i in line_starts {
          let tok = &toks[*i];
          let tok_meta = &toks_meta[*i];
          if tok == &Tok::Space {
@@ -71,9 +71,9 @@ impl IndentationEstimator {
    }
 }
 
-pub fn estimate_indentation(toks: &[Tok], toks_meta: &[TokMeta], sol_indices: &[usize]) -> usize {
+pub fn estimate_indentation(toks: &[Tok], toks_meta: &[TokMeta], line_starts: &[usize]) -> usize {
    IndentationEstimator::new()
-      .count(toks, toks_meta, sol_indices)
+      .count(toks, toks_meta, line_starts)
       .estimate()
 }
 
@@ -87,9 +87,9 @@ mod tests {
       ($string:tt, $expected:tt) => {
          let source = indoc!($string);
          let chars: Vec<_> = source.chars().collect();
-         let (toks, toks_meta, sol_indices) = tokenize(&chars);
+         let (toks, toks_meta, line_starts) = tokenize(&chars);
          let estimated = IndentationEstimator::new()
-            .count(&toks, &toks_meta, &sol_indices)
+            .count(&toks, &toks_meta, &line_starts)
             .estimate();
          assert_eq!(estimated, $expected);
       };

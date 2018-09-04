@@ -25,7 +25,7 @@ fn main() {
 
    println!("----------------");
 
-   let (toks, toks_meta, sol_indices) = tokenize(&chars);
+   let (toks, toks_meta, line_starts) = tokenize(&chars);
 
    toks
       .iter()
@@ -41,11 +41,11 @@ fn main() {
 
    println!("----------------");
 
-   sol_indices.iter().for_each(|pos| println!("{}", pos));
+   line_starts.iter().for_each(|pos| println!("{}", pos));
 
    println!("----------------");
 
-   let module_indentation = estimate_indentation(&toks, &toks_meta, &sol_indices);
+   let module_indentation = estimate_indentation(&toks, &toks_meta, &line_starts);
 
    println!("Indentation: {}", module_indentation);
 

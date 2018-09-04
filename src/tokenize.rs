@@ -317,14 +317,14 @@ struct Tokenizer<'s> {
    line: usize,
    col: usize,
    advancer: CharAdvancer<'s>,
-   sol_indices: Vec<usize>,
+   line_starts: Vec<usize>,
 }
 
 impl<'s> Tokenizer<'s> {
    fn new(chars: &'s [char]) -> Self {
       let toks = vec![];
       let toks_meta = vec![];
-      let sol_indices = vec![0];
+      let line_starts = vec![0];
 
       let end = 0;
       let line = 1;
@@ -339,7 +339,7 @@ impl<'s> Tokenizer<'s> {
          line,
          col,
          advancer,
-         sol_indices,
+         line_starts,
       }
    }
 
@@ -347,11 +347,11 @@ impl<'s> Tokenizer<'s> {
       let Self {
          toks,
          toks_meta,
-         sol_indices,
+         line_starts,
          ..
       } = self;
 
-      (toks, toks_meta, sol_indices)
+      (toks, toks_meta, line_starts)
    }
 
    fn push(&mut self, tok: Tok, end: usize) {
@@ -387,7 +387,7 @@ impl<'s> Tokenizer<'s> {
          let end = self.end;
          self.push(Tok::LineEnd, end);
       } else {
-         self.sol_indices.pop();
+         self.line_starts.pop();
       }
 
       self
@@ -402,7 +402,7 @@ impl<'s> Tokenizer<'s> {
          if after_new_line {
             self.line += 1;
             self.col = 1;
-            self.sol_indices.push(self.toks.len());
+            self.line_starts.push(self.toks.len());
          }
       } else {
          panic!(
